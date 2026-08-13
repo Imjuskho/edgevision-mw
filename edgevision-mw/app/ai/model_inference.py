@@ -81,13 +81,13 @@ class BaseEngine:
     def is_loaded(self) -> bool:
         return False
 
-    def detect(self, image, conf_threshold: float = 0.35) -> list[Detection]:
+    def detect(self, _image, _conf_threshold: float = 0.35) -> list[Detection]:
         return []
 
-    def classify(self, crop) -> dict:
+    def classify(self, _crop) -> dict:
         return {"class_name": "unknown", "confidence": 0.0}
 
-    def _track_inference(self, method: str, func, *args, **kwargs):
+    def _track_inference(self, _method: str, func, *args, **kwargs):
         import time
 
         from app.api.metrics import inference_duration_seconds, inference_requests_total
@@ -190,7 +190,7 @@ class ONNXEngine(BaseEngine):
             logger.error("onnx_engine_detect_failed", error=str(exc))
             return []
 
-    def classify(self, crop) -> dict:
+    def classify(self, _crop) -> dict:
         return {"class_name": "unknown", "confidence": 0.0}
 
 
@@ -297,10 +297,10 @@ class SimpleFallbackEngine(BaseEngine):
         # callers can detect the absence of a valid model and fail fast.
         return False
 
-    def detect(self, image, conf_threshold: float = 0.35) -> list[Detection]:
+    def detect(self, _image, _conf_threshold: float = 0.35) -> list[Detection]:
         return []
 
-    def classify(self, crop) -> dict:
+    def classify(self, _crop) -> dict:
         return {"class_name": "unknown", "confidence": 0.0}
 
 

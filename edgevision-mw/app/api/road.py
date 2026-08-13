@@ -122,14 +122,14 @@ async def segment_image(
     if existing_ra:
         existing_ra.instances = [inst.model_dump() for inst in instances]
         existing_ra.surface_type = surface_type
-        existing_ra.model_version = "yolov8n-seg-v1"
+        existing_ra.model_version = "yolov8n-seg-v2-corrected"
         existing_ra.auto_generated = True
     else:
         ra = RoadAnnotation(
             annotation_id=request.image_id,
             surface_type=surface_type,
             instances=[inst.model_dump() for inst in instances],
-            model_version="yolov8n-seg-v1",
+            model_version="yolov8n-seg-v2-corrected",
             auto_generated=True,
             reviewed=False,
         )
@@ -149,7 +149,7 @@ async def segment_image(
         image_id=request.image_id,
         instances=instances,
         surface_type=surface_type,
-        model_version="yolov8n-seg-v1",
+        model_version="yolov8n-seg-v2-corrected",
         latency_ms=round(elapsed_ms, 2),
     )
 

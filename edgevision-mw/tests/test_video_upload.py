@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import io
 import uuid
 from unittest.mock import MagicMock, patch
@@ -48,10 +49,8 @@ def _make_test_mp4(num_frames: int = 3, fps: float = 2.0) -> bytes:
         with open(tmp.name, "rb") as f:
             return f.read()
     finally:
-        try:
+        with contextlib.suppress(OSError):
             os.unlink(tmp.name)
-        except OSError:
-            pass
 
 
 @pytest.fixture(autouse=True)

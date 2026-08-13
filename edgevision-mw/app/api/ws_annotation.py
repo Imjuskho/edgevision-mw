@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import os
 import time
 
@@ -121,8 +122,11 @@ async def websocket_annotate(websocket: WebSocket, model_type: str = "object_det
     cached_depth: tuple | None = None
 
     if model_type == ModelType.object_detection.value:
-        asyncio.create_task(_warmup_depth_estimator())
-        asyncio.create_task(_warmup_face_blurrer())
+        warmup_tasks = [
+            asyncio.create_task(_warmup_depth_estimator()),
+            asyncio.create_task(_warmup_face_blurrer()),
+        ]
+        del warmup_tasks
 
     logger.info("ws_annotation_connected", model_type=model_type, user_id=str(user.get("sub", "")))
 
@@ -155,9 +159,10 @@ async def websocket_annotate(websocket: WebSocket, model_type: str = "object_det
             processing = True
             frame_index += 1
             current_index = frame_index
+            current_dropped = dropped_frames
 
-            async def _process_frame(frame_bytes: bytes, idx: int) -> None:
-                nonlocal processing, dropped_frames, pending_frame, cached_depth
+            async def _process_frame(frame_bytes: bytes, idx: int, *, dropped_total: int) -> None:
+                nonlocal processing, dropped_frames, pending_frame, cached_depth, frame_index
                 start = time.time()
                 try:
                     nparr = np.frombuffer(frame_bytes, dtype=np.uint8)
@@ -253,14 +258,12 @@ async def websocket_annotate(websocket: WebSocket, model_type: str = "object_det
                         detections=len(raw_detections) if raw_detections else len(tracked),
                         duration_ms=duration_ms,
                         depth_available=depth_available,
-                        dropped_total=dropped_frames,
+                        dropped_total=dropped_total,
                     )
                 except Exception as exc:
                     logger.error("ws_annotation_frame_error", error=str(exc))
-                    try:
+                    with contextlib.suppress(Exception):
                         await websocket.send_json({"error": "Inference failed", "detail": str(exc)})
-                    except Exception:
-                        pass
                 finally:
                     processing = False
                     if pending_frame is not None:
@@ -268,15 +271,23 @@ async def websocket_annotate(websocket: WebSocket, model_type: str = "object_det
                         pending_frame = None
                         frame_index += 1
                         processing = True
-                        asyncio.create_task(_process_frame(next_frame, frame_index))
+                        pending_tasks = [
+                            asyncio.create_task(
+                                _process_frame(next_frame, frame_index, dropped_total=dropped_total)
+                            )
+                        ]
+                        del pending_tasks
 
-            asyncio.create_task(_process_frame(message, current_index))
+            frame_tasks = [
+                asyncio.create_task(
+                    _process_frame(message, current_index, dropped_total=current_dropped)
+                )
+            ]
+            del frame_tasks
 
     except WebSocketDisconnect:
         logger.info("ws_annotation_disconnected", model_type=model_type, dropped_frames=dropped_frames)
     except Exception as exc:
         logger.error("ws_annotation_error", error=str(exc))
-        try:
+        with contextlib.suppress(Exception):
             await websocket.send_json({"error": "Inference failed", "detail": str(exc)})
-        except Exception:
-            pass

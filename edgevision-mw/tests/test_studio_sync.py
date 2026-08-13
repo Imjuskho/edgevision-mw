@@ -316,7 +316,7 @@ async def test_sync_wrong_user_session(db_session, test_client, jwt_token_factor
 
     user1 = await _create_user(db_session)
     user2 = await _create_user(db_session)
-    node = await _create_node(db_session)
+    await _create_node(db_session)
     ds = await _create_dataset(db_session)
 
     sess = AnnotationSession(
@@ -454,7 +454,7 @@ async def test_sync_status_returns_recent_changes(db_session, test_client, jwt_t
     node = await _create_node(db_session)
     ds = await _create_dataset(db_session)
     batch = await _create_batch(db_session, node)
-    ann = await _create_annotation(db_session, ds, batch, image_index=40)
+    await _create_annotation(db_session, ds, batch, image_index=40)
 
     sess = AnnotationSession(
         user_id=user.id,
@@ -600,7 +600,7 @@ async def test_sync_reject_on_missing_annotation(db_session, test_client, jwt_to
     from datetime import datetime
 
     user = await _create_user(db_session)
-    node = await _create_node(db_session)
+    await _create_node(db_session)
     ds = await _create_dataset(db_session)
 
     sess = AnnotationSession(

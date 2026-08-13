@@ -1,7 +1,7 @@
 import enum
 
 
-class NodeCategory(str, enum.Enum):
+class NodeCategory(enum.StrEnum):
     ROAD = "ROAD"
     AGRI = "AGRI"
     WILDLIFE = "WILDLIFE"
@@ -9,20 +9,20 @@ class NodeCategory(str, enum.Enum):
     BIOMETRIC = "BIOMETRIC"
 
 
-class NodeStatus(str, enum.Enum):
+class NodeStatus(enum.StrEnum):
     ONLINE = "ONLINE"
     OFFLINE = "OFFLINE"
     DEGRADED = "DEGRADED"
     MAINTENANCE = "MAINTENANCE"
 
 
-class PIIMode(str, enum.Enum):
+class PIIMode(enum.StrEnum):
     STRICT = "STRICT"
     MODERATE = "MODERATE"
     NONE = "NONE"
 
 
-class BatchStatus(str, enum.Enum):
+class BatchStatus(enum.StrEnum):
     PENDING = "PENDING"
     VALIDATING = "VALIDATING"
     VALIDATED = "VALIDATED"
@@ -30,7 +30,7 @@ class BatchStatus(str, enum.Enum):
     REJECTED = "REJECTED"
 
 
-class AnnotationStatus(str, enum.Enum):
+class AnnotationStatus(enum.StrEnum):
     PENDING = "PENDING"
     AUTO_LABELED = "AUTO_LABELED"
     HUMAN_REVIEW = "HUMAN_REVIEW"
@@ -39,7 +39,7 @@ class AnnotationStatus(str, enum.Enum):
     REJECTED = "REJECTED"
 
 
-class DatasetStatus(str, enum.Enum):
+class DatasetStatus(enum.StrEnum):
     BUILDING = "BUILDING"
     READY = "READY"
     FOR_SALE = "FOR_SALE"
@@ -47,13 +47,13 @@ class DatasetStatus(str, enum.Enum):
     RETRACTED = "RETRACTED"
 
 
-class LicenseType(str, enum.Enum):
+class LicenseType(enum.StrEnum):
     PERPETUAL = "PERPETUAL"
     ANNUAL = "ANNUAL"
     EXCLUSIVE = "EXCLUSIVE"
 
 
-class ExportStatus(str, enum.Enum):
+class ExportStatus(enum.StrEnum):
     PENDING = "PENDING"
     PROCESSING = "PROCESSING"
     COMPLETED = "COMPLETED"
@@ -61,7 +61,7 @@ class ExportStatus(str, enum.Enum):
     BLOCKED = "BLOCKED"
 
 
-class UserRole(str, enum.Enum):
+class UserRole(enum.StrEnum):
     ADMIN = "ADMIN"
     OPERATOR = "OPERATOR"
     ANNOTATOR = "ANNOTATOR"
@@ -70,7 +70,7 @@ class UserRole(str, enum.Enum):
     FIELD_TECH = "FIELD_TECH"
 
 
-class ImageSource(str, enum.Enum):
+class ImageSource(enum.StrEnum):
     FILE = "file"
     WEBCAM = "webcam"
     URL = "url"
@@ -78,7 +78,7 @@ class ImageSource(str, enum.Enum):
     SCREEN_CAPTURE = "screen_capture"
 
 
-class ModelType(str, enum.Enum):
+class ModelType(enum.StrEnum):
     road_segmentation = "road_segmentation"
     agri_crop_classification = "agri_crop_classification"
     agri_health_classification = "agri_health_classification"
@@ -86,20 +86,20 @@ class ModelType(str, enum.Enum):
     classification = "classification"
 
 
-class ModelFormat(str, enum.Enum):
+class ModelFormat(enum.StrEnum):
     ULTRALYTICS = "ultralytics"
     ONNX = "onnx"
     TORCHSCRIPT = "torchscript"
 
 
-class TrainingStatus(str, enum.Enum):
+class TrainingStatus(enum.StrEnum):
     PENDING = "pending"
     RUNNING = "running"
     COMPLETED = "completed"
     FAILED = "failed"
 
 
-class ConsentStatus(str, enum.Enum):
+class ConsentStatus(enum.StrEnum):
     ACTIVE = "ACTIVE"
     WITHDRAWN = "WITHDRAWN"
     EXPIRED = "EXPIRED"

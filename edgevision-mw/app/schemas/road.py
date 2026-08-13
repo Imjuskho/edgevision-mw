@@ -28,7 +28,7 @@ class InstanceMask(BaseModel):
 
 class RoadSegmentationRequest(BaseModel):
     image_id: UUID = Field(..., description="Annotation/image ID to segment")
-    conf_threshold: float = Field(default=0.35, ge=0.0, le=1.0, description="Confidence threshold")
+    conf_threshold: float = Field(default=0.5, ge=0.0, le=1.0, description="Confidence threshold")
     iou_threshold: float = Field(default=0.45, ge=0.0, le=1.0, description="IoU NMS threshold")
     return_polygons: bool = Field(default=True, description="Whether to return polygon simplifications")
 
@@ -55,7 +55,7 @@ class RoadSegmentationBatchRequest(BaseModel):
         description="remaining = unannotated only; all = every frame (still skips reviewed unless force)",
     )
     force: bool = Field(default=False, description="Re-run even when auto labels exist")
-    conf_threshold: float = Field(default=0.35, ge=0.0, le=1.0)
+    conf_threshold: float = Field(default=0.5, ge=0.0, le=1.0)
     iou_threshold: float = Field(default=0.45, ge=0.0, le=1.0)
 
 
@@ -147,7 +147,7 @@ class ColorExtractionResponse(BaseModel):
 
 class TrackingRequest(BaseModel):
     image_ids: list[UUID] = Field(..., min_length=2, max_length=200, description="Sequential image IDs to track across")
-    conf_threshold: float = Field(default=0.35, ge=0.0, le=1.0)
+    conf_threshold: float = Field(default=0.5, ge=0.0, le=1.0)
 
 
 class TrackingResponse(BaseModel):
@@ -157,4 +157,4 @@ class TrackingResponse(BaseModel):
 
 class RoadAnalyzeRequest(BaseModel):
     dataset_id: UUID = Field(..., description="Dataset ID to analyze")
-    conf_threshold: float = Field(default=0.35, ge=0.0, le=1.0)
+    conf_threshold: float = Field(default=0.5, ge=0.0, le=1.0)

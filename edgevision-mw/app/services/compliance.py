@@ -275,7 +275,7 @@ async def run_pii_check(db: AsyncSession, dataset_id: str) -> PIICheckResult:
     from app.models.annotation import Annotation
     from app.models.dataset import Dataset
 
-    model_loaded = _check_pii_model()
+    _check_pii_model()
 
     # Look up the Dataset UUID from the dataset_id string (e.g. "ds-abc123")
     ds_result = await db.execute(

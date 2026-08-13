@@ -251,7 +251,7 @@ class TestJsonSafeBatchWrites:
 
     @pytest.mark.asyncio
     async def test_annotation_sanitizes_detected_objects_on_assign(self, db_session):
-        ds, annotations = await _seed_dataset_with_annotations(db_session, count=1)
+        _ds, annotations = await _seed_dataset_with_annotations(db_session, count=1)
         ann = annotations[0]
 
         ann.detected_objects = {
@@ -279,7 +279,7 @@ class TestJsonSafeBatchWrites:
     async def test_auto_label_annotations_persists_numpy_detections(self, db_session):
         from app.workers.tasks import _auto_label_annotations_async
 
-        ds, annotations = await _seed_dataset_with_annotations(db_session, count=1)
+        _ds, annotations = await _seed_dataset_with_annotations(db_session, count=1)
         ann = annotations[0]
 
         numpy_detections = [
@@ -320,7 +320,7 @@ class TestJsonSafeBatchWrites:
 
     @pytest.mark.asyncio
     async def test_road_annotation_sanitizes_float32_instances(self, db_session):
-        ds, annotations = await _seed_dataset_with_annotations(db_session, count=1)
+        _ds, annotations = await _seed_dataset_with_annotations(db_session, count=1)
         ann = annotations[0]
 
         ra = RoadAnnotation(
@@ -363,12 +363,12 @@ class TestJsonSafeBatchWrites:
         import io
 
         from PIL import Image
+        from sqlalchemy import select
 
         from app.ai.road_segmenter import InstanceMaskResult
         from app.workers.tasks import _auto_label_road_async
-        from sqlalchemy import select
 
-        ds, annotations = await _seed_dataset_with_annotations(db_session, count=1)
+        _ds, annotations = await _seed_dataset_with_annotations(db_session, count=1)
         ann = annotations[0]
 
         numpy_results = [

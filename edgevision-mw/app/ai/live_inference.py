@@ -8,6 +8,7 @@ import numpy as np
 from app.ai.mono_3d import attach_3d_boxes
 from app.ai.scene_objects import enrich_live_detections
 from app.ai.yolo_seg import SEG_TO_TAXONOMY, attach_masks_from_instances, get_yolo_seg_segmenter, mask_to_polygon
+from app.core.json_utils import json_safe as _json_safe
 from app.core.logging import get_logger
 from app.models.enums import ModelType
 
@@ -143,9 +144,6 @@ def maybe_estimate_depth(
             depth_map, depth_available = cached
             return depth_map, depth_available, True
         return None, False, True
-
-
-from app.core.json_utils import json_safe as _json_safe
 
 
 def build_annotations(tracked: list[dict]) -> list[dict]:

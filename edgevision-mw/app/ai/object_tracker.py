@@ -175,7 +175,7 @@ def _hungarian(cost: np.ndarray) -> list[tuple[int, int]]:
         from scipy.optimize import linear_sum_assignment
 
         row, col = linear_sum_assignment(cost)
-        return list(zip(row.tolist(), col.tolist()))
+        return list(zip(row.tolist(), col.tolist(), strict=False))
     except ImportError:
         return _hungarian_greedy(cost)
 

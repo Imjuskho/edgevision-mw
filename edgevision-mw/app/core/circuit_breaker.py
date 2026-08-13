@@ -33,10 +33,13 @@ class CircuitBreaker:
     @property
     def state(self) -> CircuitState:
         with self._lock:
-            if self._state == CircuitState.OPEN and self._last_failure_time is not None:
-                if time.monotonic() - self._last_failure_time >= self.recovery_timeout:
-                    self._state = CircuitState.HALF_OPEN
-                    self._half_open_calls = 0
+            if (
+                self._state == CircuitState.OPEN
+                and self._last_failure_time is not None
+                and time.monotonic() - self._last_failure_time >= self.recovery_timeout
+            ):
+                self._state = CircuitState.HALF_OPEN
+                self._half_open_calls = 0
             return self._state
 
     def _record_success(self) -> None:

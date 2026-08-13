@@ -235,7 +235,7 @@ class AgriSegmenter:
             h_n = min(h, self._input_height - y1) / self._input_height
             bbox = [x1_n, y1_n, w_n, h_n]
 
-            mask = np.zeros((orig_h, orig_w), dtype=np.uint8)
+            np.zeros((orig_h, orig_w), dtype=np.uint8)
             mask_rle = ""
             polygon = None
 
@@ -262,7 +262,6 @@ class AgriSegmenter:
                     mask_bin[:, :bx1] = 0
                     mask_bin[:, bx2:] = 0
 
-                    mask = mask_bin
 
                     try:
                         from pycocotools import mask as mask_utils
@@ -282,7 +281,7 @@ class AgriSegmenter:
                     except ImportError:
                         polygon = None
                 except Exception:
-                    mask = np.zeros((orig_h, orig_w), dtype=np.uint8)
+                    np.zeros((orig_h, orig_w), dtype=np.uint8)
 
             class_name = self._class_names[cid] if cid < len(self._class_names) else f"class_{cid}"
 

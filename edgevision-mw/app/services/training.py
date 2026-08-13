@@ -119,7 +119,7 @@ async def _export_dataset_to_yolo(
             f.write(img_data)
 
         img = Image.open(img_path)
-        img_w, img_h = img.size
+        _img_w, _img_h = img.size
 
         label_lines: list[str] = []
         for box in boxes:

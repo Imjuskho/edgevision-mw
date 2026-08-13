@@ -310,13 +310,13 @@ def _iou_agreement(labels_a: dict, labels_b: dict) -> float:
     bboxes_a = []
     bboxes_b = []
 
-    for key, val in labels_a.items():
+    for _key, val in labels_a.items():
         if isinstance(val, dict) and "bbox" in val:
             bboxes_a.append(val["bbox"])
         elif isinstance(val, list) and len(val) == 4:
             bboxes_a.append(val)
 
-    for key, val in labels_b.items():
+    for _key, val in labels_b.items():
         if isinstance(val, dict) and "bbox" in val:
             bboxes_b.append(val["bbox"])
         elif isinstance(val, list) and len(val) == 4:

@@ -145,7 +145,7 @@ def estimate_3d(
     )
 
     half_l = (length_m * scale / img_w) / 2
-    half_w = (width_m * scale / img_w) / 2
+    (width_m * scale / img_w) / 2
     half_h = (height_m * scale / img_h) / 2
 
     z_base = depth

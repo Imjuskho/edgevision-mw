@@ -108,7 +108,7 @@ async def ai_assist(
                 for det in raw:
                     annotations.append(AIAnnotation(
                         class_name=det.get("class_name", det.get("taxonomy", "object")),
-                        confidence=det.get("confidence", 0.0),
+                        confidence=_clamp_confidence(det.get("confidence", 0.0)),
                         bbox=det.get("bbox", [0.0, 0.0, 1.0, 1.0]),
                         polygon=_mask_to_polygon(det.get("mask"), pil_image.width, pil_image.height)
                         if request.return_polygons and det.get("mask") is not None else None,
@@ -125,7 +125,7 @@ async def ai_assist(
                 for idx, det in enumerate(detections):
                     ann = AIAnnotation(
                         class_name=det.class_name,
-                        confidence=det.confidence,
+                        confidence=_clamp_confidence(det.confidence),
                         bbox=[det.x1, det.y1, det.x2 - det.x1, det.y2 - det.y1],
                     )
                     mask = seg_masks.get(idx)
@@ -144,7 +144,7 @@ async def ai_assist(
             result = yolo.classify(crop)
             annotations.append(AIAnnotation(
                 class_name=result["class_name"],
-                confidence=result["confidence"],
+                confidence=_clamp_confidence(result["confidence"]),
                 bbox=_mask_to_bbox(mask),
                 polygon=_mask_to_polygon(mask, pil_image.width, pil_image.height),
             ))
@@ -162,7 +162,7 @@ async def ai_assist(
             result = yolo.classify(crop)
             annotations.append(AIAnnotation(
                 class_name=result["class_name"],
-                confidence=result["confidence"],
+                confidence=_clamp_confidence(result["confidence"]),
                 bbox=_mask_to_bbox(mask),
                 polygon=_mask_to_polygon(mask, pil_image.width, pil_image.height),
             ))
@@ -324,6 +324,13 @@ async def ai_assist_batch(
 
 
 # ─── Helpers ───
+
+def _clamp_confidence(conf: float) -> float:
+    """Defensive clamp for AIAnnotation confidence field."""
+    if conf > 1.0:
+        conf = conf / 100.0 if conf <= 100.0 else 1.0
+    return max(0.0, min(1.0, conf))
+
 
 def _encode_image_np(image_np) -> bytes | None:
     import cv2

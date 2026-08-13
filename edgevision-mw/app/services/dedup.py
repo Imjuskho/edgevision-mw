@@ -532,11 +532,11 @@ async def resolve_groups(
         Mapping of ``DuplicateGroup.id`` (as string) → action.
         Supported actions:
 
-        - ``keep_first`` – keep the first member, discard the rest.
-        - ``keep_best``  – keep the member with the highest
+        - ``keep_first`` - keep the first member, discard the rest.
+        - ``keep_best``  - keep the member with the highest
           ``Annotation.quality_score``, discard the rest.
-        - ``keep_all``   – mark every member as kept.
-        - ``remove_all`` – mark every member as discarded.
+        - ``keep_all``   - mark every member as kept.
+        - ``remove_all`` - mark every member as discarded.
 
     Returns the number of groups resolved.
     """

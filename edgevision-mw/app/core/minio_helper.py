@@ -161,8 +161,7 @@ def stream_from_minio(bucket: str, key: str) -> Generator[bytes, None, None]:
     mc = get_minio_client_sync()
     try:
         response = mc.get_object(bucket, key)
-        for chunk in response.stream(8192):
-            yield chunk
+        yield from response.stream(8192)
         response.close()
         response.release_conn()
     except Exception as exc:

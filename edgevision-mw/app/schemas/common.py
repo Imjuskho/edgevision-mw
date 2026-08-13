@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import math
 from datetime import datetime
-from typing import Generic, TypeVar
+from typing import TypeVar
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -53,7 +53,7 @@ class PaginationParams(BaseModel):
         return v
 
 
-class PaginatedResponse(BaseModel, Generic[T]):
+class PaginatedResponse[T](BaseModel):
     items: list[T] = Field(..., description="List of items for the current page")
     total: int = Field(..., description="Total number of items across all pages")
     page: int = Field(..., description="Current page number")

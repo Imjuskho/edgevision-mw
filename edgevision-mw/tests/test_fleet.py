@@ -1,3 +1,4 @@
+import contextlib
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
@@ -77,7 +78,7 @@ async def test_invalid_signature_rejected(db_session):
     message = f"{node.node_id}:{now_str}".encode()
     sig = wrong_key.sign(message)
     sig_b64 = base64.b64encode(sig).decode()
-    wrong_pub_b64 = base64.b64encode(
+    base64.b64encode(
         wrong_key.public_key().public_bytes(
             encoding=__import__("cryptography.hazmat.primitives.serialization", fromlist=["Encoding"]).Encoding.Raw,
             format=__import__("cryptography.hazmat.primitives.serialization", fromlist=["PublicFormat"]).PublicFormat.Raw,
@@ -188,10 +189,8 @@ async def test_heartbeat_rollback_on_failure(db_session):
 
     with patch("app.services.fleet.Heartbeat") as MockHB:
         MockHB.side_effect = RuntimeError("Simulated insert failure")
-        try:
+        with contextlib.suppress(RuntimeError):
             await record_heartbeat(db_session, node.id, payload)
-        except RuntimeError:
-            pass
 
     hb_result = await db_session.execute(
         select(Heartbeat).where(Heartbeat.node_id == node.id)

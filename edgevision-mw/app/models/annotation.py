@@ -68,7 +68,7 @@ class Annotation(StorageKeyMixin, TimestampMixin, Base):
     )
 
     @validates("detected_objects", "auto_labels", "human_labels", "qa_labels")
-    def _sanitize_jsonb_fields(self, key: str, value: dict | None) -> dict | None:
+    def _sanitize_jsonb_fields(self, _key: str, value: dict | None) -> dict | None:
         if value is None:
             return None
         return json_safe(value)

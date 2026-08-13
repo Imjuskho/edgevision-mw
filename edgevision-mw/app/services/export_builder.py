@@ -87,7 +87,7 @@ async def generate_preview(
 def _preview_for_format(ann: Annotation, fmt: str) -> dict:
     labels = ann.human_labels or ann.auto_labels or {}
     detections, orientation = _collect_detections(ann)
-    class_names = labels.get("classes", [])
+    labels.get("classes", [])
     badges: list[str] = []
 
     has_seg = any(d.get("mask_rle") or d.get("mask") for d in detections)
@@ -588,7 +588,7 @@ def _stratified_split(
     train_r = split_ratio.get("train", 0.7)
     val_r = split_ratio.get("val", 0.2)
     total_r = train_r + val_r
-    test_r = 1.0 - total_r if total_r < 1.0 else 0.0
+    1.0 - total_r if total_r < 1.0 else 0.0
 
     if not stratify or not annotations:
         shuffled = list(annotations)

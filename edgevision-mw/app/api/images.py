@@ -97,10 +97,7 @@ async def upload_images(
 
         logger.info("upload_read_file", trace_id=trace_id, byte_count=len(content), filename=f.filename, source=source)
 
-        if is_video_upload(f.content_type, original_filename, content):
-            max_size = MAX_VIDEO_SIZE
-        else:
-            max_size = MAX_FILE_SIZE
+        max_size = MAX_VIDEO_SIZE if is_video_upload(f.content_type, original_filename, content) else MAX_FILE_SIZE
 
         if len(content) > max_size:
             errors.append({

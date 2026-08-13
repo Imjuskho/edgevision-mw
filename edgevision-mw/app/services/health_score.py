@@ -29,7 +29,7 @@ class HealthScore:
 def hamming_distance(hash1: str, hash2: str) -> int:
     if len(hash1) != len(hash2):
         raise ValueError("Hash strings must be equal length")
-    return sum(c1 != c2 for c1, c2 in zip(hash1, hash2))
+    return sum(c1 != c2 for c1, c2 in zip(hash1, hash2, strict=False))
 
 
 def _cosine_distance_matrix(embeddings: list[list[float]]) -> list[float]:
@@ -39,7 +39,7 @@ def _cosine_distance_matrix(embeddings: list[list[float]]) -> list[float]:
     distances = []
     for i in range(n):
         for j in range(i + 1, n):
-            dot = sum(a * b for a, b in zip(embeddings[i], embeddings[j]))
+            dot = sum(a * b for a, b in zip(embeddings[i], embeddings[j], strict=False))
             norm_a = math.sqrt(sum(a * a for a in embeddings[i]))
             norm_b = math.sqrt(sum(b * b for b in embeddings[j]))
             if norm_a == 0 or norm_b == 0:

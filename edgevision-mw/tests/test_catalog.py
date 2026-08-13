@@ -199,7 +199,7 @@ async def test_manifest_handles_flat_objects_list(db_session):
 
 @pytest.mark.asyncio
 async def test_list_datasets_filters(db_session):
-    for i in range(3):
+    for _i in range(3):
         await _create_ready_dataset(db_session)
 
     result1 = await search_datasets(db_session, filters={})

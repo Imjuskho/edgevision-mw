@@ -29,12 +29,17 @@ def live_detections_to_studio_boxes(
 
         polygon: list[list[float]] | None = None
         mask = obj.get("mask")
-        if isinstance(mask, list) and len(mask) >= 3:
-            if mask and isinstance(mask[0], (list, tuple)) and len(mask[0]) >= 2:
-                polygon = [
-                    [max(0.0, min(1.0, float(p[0]))), max(0.0, min(1.0, float(p[1])))]
-                    for p in mask[:32]
-                ]
+        if (
+            isinstance(mask, list)
+            and len(mask) >= 3
+            and mask
+            and isinstance(mask[0], (list, tuple))
+            and len(mask[0]) >= 2
+        ):
+            polygon = [
+                [max(0.0, min(1.0, float(p[0]))), max(0.0, min(1.0, float(p[1])))]
+                for p in mask[:32]
+            ]
 
         bbox = obj.get("bbox")
         if polygon:

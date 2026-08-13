@@ -370,7 +370,7 @@ async def test_revenue_breakdown_rounds_correctly_on_uneven_split(db_session):
 
     fake_now = datetime(2099, 7, 15, tzinfo=UTC)
 
-    seller = await _create_user(db_session, credit=Decimal("999.00"))
+    await _create_user(db_session, credit=Decimal("999.00"))
     created_ds_ids = []
     for price in prices:
         ds = await _create_ready_dataset(db_session, price=price)
@@ -732,7 +732,7 @@ async def test_withdrawal_uses_for_update_preventing_duplicates(db_session):
     from app.services.compliance import withdraw_consent
 
     subject_hash = f"sub-{uuid4().hex[:8]}"
-    for i in range(3):
+    for _i in range(3):
         consent = ConsentLedger(
             id=uuid4(),
             subject_hash=subject_hash,
@@ -1014,7 +1014,7 @@ async def test_non_pending_batch_is_never_touched(db_session_factory):
         await db_session.commit()
 
     from app.workers.tasks import auto_label_task
-    with patch.object(auto_label_task, "delay") as mock_delay:
+    with patch.object(auto_label_task, "delay"):
         redispatched = await _reconcile_stuck_batches_async()
 
     assert not any(r["batch_id"] == batch_id for r in redispatched)

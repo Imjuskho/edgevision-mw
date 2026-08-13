@@ -31,7 +31,7 @@ def polygon_to_mask(polygon: list, width: int, height: int) -> np.ndarray:
     if not polygon or width <= 0 or height <= 0:
         return mask
     pts = np.array(
-        [[int(round(p[0] * width)), int(round(p[1] * height))] for p in polygon],
+        [[round(p[0] * width), round(p[1] * height)] for p in polygon],
         dtype=np.int32,
     )
     if pts.shape[0] >= 3:

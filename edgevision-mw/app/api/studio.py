@@ -458,7 +458,7 @@ async def get_health(
 
     certified_stmt = select(func.count()).where(
         Annotation.dataset_id == ds.id,
-        Annotation.is_certified == True,
+        Annotation.is_certified,
     )
     certified = (await db.execute(certified_stmt)).scalar() or 0
 

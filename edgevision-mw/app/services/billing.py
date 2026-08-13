@@ -247,10 +247,7 @@ async def get_revenue_breakdown(
     try:
         year, month = map(int, period.split("-"))
         start_date = datetime(year, month, 1, tzinfo=UTC)
-        if month == 12:
-            end_date = datetime(year + 1, 1, 1, tzinfo=UTC)
-        else:
-            end_date = datetime(year, month + 1, 1, tzinfo=UTC)
+        end_date = datetime(year + 1, 1, 1, tzinfo=UTC) if month == 12 else datetime(year, month + 1, 1, tzinfo=UTC)
     except (ValueError, TypeError):
         start_date = datetime.now(UTC).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
         end_date = start_date + timedelta(days=32)

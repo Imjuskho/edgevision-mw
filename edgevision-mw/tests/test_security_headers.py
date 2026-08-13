@@ -5,7 +5,7 @@ import pytest
 async def test_cors_headers_present(test_client):
     resp = await test_client.get("/health", headers={"Origin": "http://localhost:3000"})
     assert resp.status_code == 200
-    header_names = [k.lower() for k in resp.headers.keys()]
+    header_names = [k.lower() for k in resp.headers]
     assert "access-control-allow-origin" in header_names
 
 

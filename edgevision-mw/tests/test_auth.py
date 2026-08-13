@@ -72,7 +72,7 @@ async def test_buyer_api_key_creation(db_session, test_client, api_key_factory):
             "full_name": "API Key Tester",
         },
     )
-    user_id = reg.json()["id"]
+    reg.json()["id"]
 
     login = await test_client.post(
         "/api/v1/auth/login",

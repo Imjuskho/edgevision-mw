@@ -113,7 +113,14 @@ class SAMSegmenter:
             )
             for inp in self._decoder_session.get_inputs():
                 name = inp.name.lower()
-                for token in ("image_embeddings", "point_coords", "point_labels", "mask_input", "has_mask_input", "orig_im_size"):
+                for token in (
+                    "image_embeddings",
+                    "point_coords",
+                    "point_labels",
+                    "has_mask_input",
+                    "mask_input",
+                    "orig_im_size",
+                ):
                     if token in name:
                         self._decoder_inputs[token] = inp.name
                         rank = len(inp.shape) if isinstance(inp.shape, (list, tuple)) else 0
@@ -147,7 +154,7 @@ class SAMSegmenter:
 
         h, w = image.shape[:2]
         scale = _EMBED_SIZE / max(h, w)
-        nh, nw = int(round(h * scale)), int(round(w * scale))
+        nh, nw = round(h * scale), round(w * scale)
         resized = cv2.resize(image, (nw, nh), interpolation=cv2.INTER_LINEAR)
         canvas = np.full((_EMBED_SIZE, _EMBED_SIZE, 3), 128, dtype=np.uint8)
         canvas[:nh, :nw] = resized
@@ -161,7 +168,7 @@ class SAMSegmenter:
 
         h, w = image.shape[:2]
         scale = _EMBED_SIZE / max(h, w)
-        nh, nw = int(round(h * scale)), int(round(w * scale))
+        nh, nw = round(h * scale), round(w * scale)
         resized = cv2.resize(image, (nw, nh), interpolation=cv2.INTER_LINEAR)
         canvas = np.full((_EMBED_SIZE, _EMBED_SIZE, 3), 128, dtype=np.uint8)
         canvas[:nh, :nw] = resized
@@ -228,7 +235,7 @@ class SAMSegmenter:
         return masks  # [N, 256, 256]
 
     def _postprocess(
-        self, low_res_masks: np.ndarray, image: np.ndarray, orig_size: tuple[int, int]
+        self, low_res_masks: np.ndarray, _image: np.ndarray, orig_size: tuple[int, int]
     ) -> np.ndarray:
         import cv2
 

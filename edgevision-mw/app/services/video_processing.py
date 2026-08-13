@@ -5,7 +5,7 @@ import os
 import shutil
 import subprocess
 import tempfile
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from dataclasses import dataclass
 
 from app.core.logging import get_logger
@@ -136,7 +136,7 @@ def extract_video_frames(
     if probe.frame_count <= 0 or probe.fps <= 0:
         raise VideoProcessingError("Video has no readable frames")
 
-    step = max(1, int(round(probe.fps * interval_sec)))
+    step = max(1, round(probe.fps * interval_sec))
     frames: list[ExtractedFrame] = []
 
     with temp_video_file(video_bytes, filename) as path:
@@ -261,14 +261,12 @@ def _extension(filename: str) -> str:
 @contextmanager
 def temp_video_file(video_bytes: bytes, filename: str):
     ext = _extension(filename) or ".mp4"
-    tmp = tempfile.NamedTemporaryFile(suffix=ext, delete=False)
-    try:
+    with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tmp:
         tmp.write(video_bytes)
         tmp.flush()
-        tmp.close()
-        yield tmp.name
+        path = tmp.name
+    try:
+        yield path
     finally:
-        try:
-            os.unlink(tmp.name)
-        except OSError:
-            pass
+        with suppress(OSError):
+            os.unlink(path)

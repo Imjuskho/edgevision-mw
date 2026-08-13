@@ -497,7 +497,7 @@ async def _create_submitted_assignment(db_session, test_client):
 
 @pytest.mark.asyncio
 async def test_review_queue(db_session, test_client):
-    assignment_id, qa, ds, admin = await _create_submitted_assignment(db_session, test_client)
+    assignment_id, qa, _ds, _admin = await _create_submitted_assignment(db_session, test_client)
     qa_token = _make_token(qa)
 
     resp = await test_client.get(
@@ -513,7 +513,7 @@ async def test_review_queue(db_session, test_client):
 
 @pytest.mark.asyncio
 async def test_review_queue_requires_qa_role(db_session, test_client):
-    assignment_id, qa, ds, admin = await _create_submitted_assignment(db_session, test_client)
+    _assignment_id, _qa, _ds, _admin = await _create_submitted_assignment(db_session, test_client)
     annotator = await _create_user(db_session, role="ANNOTATOR")
     annotator_token = _make_token(annotator)
 
@@ -526,7 +526,7 @@ async def test_review_queue_requires_qa_role(db_session, test_client):
 
 @pytest.mark.asyncio
 async def test_review_job_detail(db_session, test_client):
-    assignment_id, qa, ds, admin = await _create_submitted_assignment(db_session, test_client)
+    assignment_id, qa, _ds, _admin = await _create_submitted_assignment(db_session, test_client)
     qa_token = _make_token(qa)
 
     resp = await test_client.get(
@@ -541,7 +541,7 @@ async def test_review_job_detail(db_session, test_client):
 
 @pytest.mark.asyncio
 async def test_certify_job(db_session, test_client):
-    assignment_id, qa, ds, admin = await _create_submitted_assignment(db_session, test_client)
+    assignment_id, qa, _ds, _admin = await _create_submitted_assignment(db_session, test_client)
     qa_token = _make_token(qa)
 
     resp = await test_client.post(
@@ -555,7 +555,7 @@ async def test_certify_job(db_session, test_client):
 
 @pytest.mark.asyncio
 async def test_reject_job(db_session, test_client):
-    assignment_id, qa, ds, admin = await _create_submitted_assignment(db_session, test_client)
+    assignment_id, qa, _ds, _admin = await _create_submitted_assignment(db_session, test_client)
     qa_token = _make_token(qa)
 
     resp = await test_client.post(
@@ -571,7 +571,7 @@ async def test_reject_job(db_session, test_client):
 
 @pytest.mark.asyncio
 async def test_get_iaa_metrics(db_session, test_client):
-    assignment_id, qa, ds, admin = await _create_submitted_assignment(db_session, test_client)
+    assignment_id, qa, _ds, _admin = await _create_submitted_assignment(db_session, test_client)
     qa_token = _make_token(qa)
 
     resp = await test_client.get(
@@ -587,7 +587,7 @@ async def test_get_iaa_metrics(db_session, test_client):
 
 @pytest.mark.asyncio
 async def test_approve_single_annotation(db_session, test_client):
-    assignment_id, qa, ds, admin = await _create_submitted_assignment(db_session, test_client)
+    assignment_id, qa, ds, _admin = await _create_submitted_assignment(db_session, test_client)
     qa_token = _make_token(qa)
 
     ann = (await db_session.execute(
@@ -604,7 +604,7 @@ async def test_approve_single_annotation(db_session, test_client):
 
 @pytest.mark.asyncio
 async def test_reject_single_annotation(db_session, test_client):
-    assignment_id, qa, ds, admin = await _create_submitted_assignment(db_session, test_client)
+    assignment_id, qa, ds, _admin = await _create_submitted_assignment(db_session, test_client)
     qa_token = _make_token(qa)
 
     ann = (await db_session.execute(

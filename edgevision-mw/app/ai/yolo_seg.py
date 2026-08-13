@@ -206,7 +206,7 @@ class YoloSegSegmenter:
 
         h, w = img.shape[:2]
         scale = min(self._input_size / w, self._input_size / h)
-        nw, nh = int(round(w * scale)), int(round(h * scale))
+        nw, nh = round(w * scale), round(h * scale)
         resized = cv2.resize(img, (nw, nh), interpolation=cv2.INTER_LINEAR)
         canvas = np.full((self._input_size, self._input_size, 3), 114, dtype=np.uint8)
         pad_x = (self._input_size - nw) // 2
@@ -274,8 +274,8 @@ class YoloSegSegmenter:
                 mask_full = cv2.resize(mask_160, (self._input_size, self._input_size))
                 # strip letterbox padding
                 mask_crop = mask_full[
-                    pad_y:pad_y + int(round(orig_h * scale)),
-                    pad_x:pad_x + int(round(orig_w * scale)),
+                    pad_y:pad_y + round(orig_h * scale),
+                    pad_x:pad_x + round(orig_w * scale),
                 ]
                 mask_crop = cv2.resize(mask_crop, (orig_w, orig_h))
                 mask_bin = (mask_crop > 0.5).astype(np.uint8)

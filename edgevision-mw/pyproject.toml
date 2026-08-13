@@ -7,7 +7,7 @@ select = ["E", "F", "W", "I", "UP", "B", "SIM", "ARG", "RET", "RUF"]
 ignore = ["E501", "B008", "UP007", "B904", "ARG001", "RET504", "RUF012"]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/*" = ["ARG001", "ARG002", "B018", "SIM115", "RUF012"]
+"tests/*" = ["ARG001", "ARG002", "ARG005", "B017", "B018", "E702", "SIM115", "SIM117", "RUF012"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["app"]

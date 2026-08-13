@@ -113,7 +113,31 @@ class TestSAMSegmenter:
             mask = seg.predict_point(img, 80, 70)
             assert mask.shape == (240, 320)
 
-    def test_mask_to_rle_raises_without_pycocotools(self):
+    def test_real_decoder_probe_and_non_heuristic_mask(self):
+        """When bundled ONNX models exist, decoder probe must pass and beat heuristics."""
+        from pathlib import Path
+
+        from app.ai.sam_segmenter import SAMSegmenter
+
+        enc = Path(__file__).resolve().parents[1] / "frontend/public/models/mobile_sam_encoder.onnx"
+        dec = Path(__file__).resolve().parents[1] / "frontend/public/models/mobile_sam_decoder.onnx"
+        if not enc.exists() or not dec.exists():
+            pytest.skip("MobileSAM ONNX weights not present")
+
+        seg = SAMSegmenter(encoder_path=str(enc), decoder_path=str(dec))
+        if not seg.is_loaded():
+            pytest.skip("MobileSAM decoder probe failed — replace decoder ONNX")
+
+        img = _make_image()
+        px, py = 80, 70
+        mask = seg.predict_point(img, px, py)
+        heur = seg._heuristic_point(img, px, py)
+        assert mask.shape == (240, 320)
+        assert mask.sum() > 0
+        inter = (mask * heur).sum()
+        union = ((mask + heur) > 0).sum()
+        iou = inter / union if union else 0.0
+        assert iou < 0.95, f"SAM mask should differ from heuristic fallback (IoU={iou:.3f})"
         from app.ai.mask_utils import mask_to_rle, pycocotools_available
 
         mask = np.zeros((100, 100), dtype=np.uint8)

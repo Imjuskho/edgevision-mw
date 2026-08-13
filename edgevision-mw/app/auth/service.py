@@ -50,7 +50,7 @@ async def authenticate_user(db: AsyncSession, email: str, password: str) -> User
 async def create_api_key(
     db: AsyncSession, user_id: UUID, key_data: dict
 ) -> tuple[str, BuyerApiKey]:
-    key_id, secret, plaintext = generate_api_key_pair()
+    key_id, _secret, plaintext = generate_api_key_pair()
     key_hash = hash_api_key_bcrypt(plaintext)
 
     expires_at = None

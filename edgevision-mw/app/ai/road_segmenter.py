@@ -64,10 +64,10 @@ def is_coco_seg_model(model_path: str) -> bool:
         if "coco" in description:
             return True
         names_raw = meta.get("names", "")
-        if isinstance(names_raw, str) and names_raw:
-            # COCO models expose 80 classes; road models expose 7.
-            if names_raw.count(":") >= 79 or "person" in names_raw:
-                return True
+        if isinstance(names_raw, str) and names_raw and (
+            names_raw.count(":") >= 79 or "person" in names_raw
+        ):
+            return True
     except Exception as exc:
         logger.warning("road_seg_coco_check_failed", model_path=model_path, error=str(exc))
     return False

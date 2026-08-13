@@ -37,7 +37,7 @@ class RoadAnnotation(TimestampMixin, Base):
     )
 
     @validates("instances")
-    def _sanitize_instances(self, key: str, value: Any) -> Any:
+    def _sanitize_instances(self, _key: str, value: Any) -> Any:
         if value is None:
             return value
         return json_safe(value)

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import hashlib
 from datetime import UTC, datetime
 from uuid import UUID
@@ -247,10 +248,8 @@ async def sync_status(
 
     since_dt = session.started_at
     if since:
-        try:
+        with contextlib.suppress(ValueError):
             since_dt = datetime.fromisoformat(since)
-        except ValueError:
-            pass
 
     limit = 200
     ann_stmt = (

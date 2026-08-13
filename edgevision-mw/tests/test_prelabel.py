@@ -219,7 +219,7 @@ class TestPrelabelAPI:
         await db_session.flush()
 
         # Prepare image record
-        img_bytes = _make_test_image(64, 64)
+        _make_test_image(64, 64)
         record = Image.new("RGB", (64, 64), color=(0, 0, 255))
         buf = io.BytesIO()
         record.save(buf, format="JPEG")

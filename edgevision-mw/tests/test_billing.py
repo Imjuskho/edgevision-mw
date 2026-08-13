@@ -95,7 +95,7 @@ async def test_decimal_precision_survives_roundtrip(db_session):
     from app.services.catalog import calculate_price
 
     # This price would drift under float: 0.1 + 0.2 != 0.3
-    buyer = await _create_buyer(db_session, credit=Decimal("99999.99"))
+    await _create_buyer(db_session, credit=Decimal("99999.99"))
     ds = await _create_ready_dataset(db_session)
 
     # Calculate price using the Decimal-based function

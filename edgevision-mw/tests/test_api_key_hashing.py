@@ -58,7 +58,7 @@ async def test_verify_api_key_bcrypt():
     """Verify bcrypt hash/verify round-trip works."""
     from app.core.security import generate_api_key_pair
 
-    key_id, secret, plaintext = generate_api_key_pair()
+    _key_id, _secret, plaintext = generate_api_key_pair()
     hashed = hash_api_key_bcrypt(plaintext)
     assert verify_api_key_bcrypt(plaintext, hashed)
     assert not verify_api_key_bcrypt("wrong_key", hashed)
@@ -102,7 +102,7 @@ async def test_delete_api_key(db_session, test_client):
 
     from app.auth.service import verify_api_key
 
-    token, user_id = await _register_admin(test_client)
+    token, _user_id = await _register_admin(test_client)
     headers = {"Authorization": f"Bearer {token}"}
 
     create_resp = await test_client.post(

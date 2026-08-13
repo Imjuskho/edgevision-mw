@@ -7,6 +7,17 @@ from app.core.logging import get_logger
 logger = get_logger("edgevision.yolo_detector")
 
 
+def _normalize_confidence(conf: float) -> float:
+    """Map YOLO confidence to [0, 1].
+
+    Some ONNX exports (notably road-seg checkpoints loaded via ultralytics
+    detect()) return a 0-100 scale instead of probabilities.
+    """
+    if conf > 1.0:
+        conf = conf / 100.0 if conf <= 100.0 else 1.0
+    return max(0.0, min(1.0, conf))
+
+
 @dataclass
 class Detection:
     class_name: str
@@ -65,7 +76,7 @@ class YOLODetector:
             names = result.names
             for box in boxes:
                 cls_id = int(box.cls[0])
-                conf = float(box.conf[0])
+                conf = _normalize_confidence(float(box.conf[0]))
                 x1, y1, x2, y2 = (float(v) for v in box.xyxy[0])
                 detections.append(
                     Detection(
@@ -96,7 +107,7 @@ class YOLODetector:
         # Classification-head models (e.g. yolov8n-cls) expose .probs
         if getattr(result, "probs", None) is not None:
             top1 = int(result.probs.top1)
-            conf = float(result.probs.top1conf)
+            conf = _normalize_confidence(float(result.probs.top1conf))
             return {"class_name": result.names.get(top1, f"class_{top1}"), "confidence": conf}
 
         # Detection/segmentation models: fall back to the highest-confidence box
@@ -105,5 +116,5 @@ class YOLODetector:
             return {"class_name": "unknown", "confidence": 0.0}
         best_idx = int(boxes.conf.argmax())
         cls_id = int(boxes.cls[best_idx])
-        conf = float(boxes.conf[best_idx])
+        conf = _normalize_confidence(float(boxes.conf[best_idx]))
         return {"class_name": result.names.get(cls_id, f"class_{cls_id}"), "confidence": conf}

@@ -182,7 +182,7 @@ async def build_dataset_sync(db: AsyncSession, dataset_id: str, build_request: d
     # Balance classes - take equal number from each
     min_count = min(len(v) for v in class_counts.values()) if class_counts else 0
     balanced = []
-    for cls, anns in class_counts.items():
+    for _cls, anns in class_counts.items():
         balanced.extend(anns[:min_count])
 
     # Deduplicate

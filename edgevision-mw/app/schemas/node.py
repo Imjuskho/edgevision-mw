@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
 
-class NodeCommandType(str, Enum):
+class NodeCommandType(StrEnum):
     REBOOT = "REBOOT"
     UPDATE_SCHEDULE = "UPDATE_SCHEDULE"
     UPDATE_FIRMWARE = "UPDATE_FIRMWARE"

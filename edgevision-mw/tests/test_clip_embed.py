@@ -33,7 +33,7 @@ class TestClipEmbedService:
         from app.services.clip_embed import compute_clip_embedding
 
         img_bytes = _make_test_image()
-        mock_session, expected_emb = _make_mock_clip_session()
+        mock_session, _expected_emb = _make_mock_clip_session()
 
         with (
             patch("app.services.clip_embed._find_clip_model", return_value=MagicMock(exists=lambda: True)),

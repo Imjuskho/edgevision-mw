@@ -157,7 +157,7 @@ export const studioApi = {
   },
 
   // Phase 8 — Road Segmentation
-  segmentRoad: (imageId: string, confThreshold = 0.35, iouThreshold = 0.45, returnPolygons = true) =>
+  segmentRoad: (imageId: string, confThreshold = 0.5, iouThreshold = 0.45, returnPolygons = true) =>
     api.post("/road/segment", {
       image_id: imageId,
       conf_threshold: confThreshold,
@@ -167,7 +167,7 @@ export const studioApi = {
 
   segmentRoadBatch: (
     imageIds: string[],
-    confThreshold = 0.35,
+    confThreshold = 0.5,
     iouThreshold = 0.45,
   ) =>
     api.post("/road/segment/batch", {
@@ -184,7 +184,7 @@ export const studioApi = {
       dataset_id: datasetId,
       scope: options.scope ?? "remaining",
       force: options.force ?? false,
-      conf_threshold: options.confThreshold ?? 0.35,
+      conf_threshold: options.confThreshold ?? 0.5,
       iou_threshold: options.iouThreshold ?? 0.45,
     }),
 
@@ -211,7 +211,7 @@ export const studioApi = {
   getRoadClasses: () =>
     api.get("/road/classes"),
 
-  analyzeRoadCondition: (datasetId: string, confThreshold = 0.35) =>
+  analyzeRoadCondition: (datasetId: string, confThreshold = 0.5) =>
     api.post("/road/analyze", {
       dataset_id: datasetId,
       conf_threshold: confThreshold,
