@@ -535,7 +535,13 @@ def auto_label_task(batch_id: str) -> bool:
         raise
 
 
-async def _auto_label_annotations_async(annotation_ids: list[str]) -> dict:
+async def _auto_label_annotations_async(
+    annotation_ids: list[str],
+    *,
+    force: bool = False,
+    confidence_threshold: float = 0.45,
+    progress_callback=None,
+) -> dict:
     from app.core.config import settings
     from app.core.database import async_session
     from app.core.dependencies import get_minio_client_sync
@@ -545,13 +551,19 @@ async def _auto_label_annotations_async(annotation_ids: list[str]) -> dict:
 
     processed = 0
     failed = 0
+    skipped = 0
+    total = len(annotation_ids)
 
     async with async_session() as db:
-        for aid in annotation_ids:
+        for idx, aid in enumerate(annotation_ids):
             try:
                 ann = await db.get(Annotation, aid)
                 if ann is None:
                     failed += 1
+                    continue
+
+                if not force and ann.human_labels is not None:
+                    skipped += 1
                     continue
 
                 mc = get_minio_client_sync()
@@ -566,12 +578,14 @@ async def _auto_label_annotations_async(annotation_ids: list[str]) -> dict:
                     continue
 
                 try:
-                    detections = prelabel_image(data)
+                    detections = prelabel_image(
+                        data, confidence_threshold=confidence_threshold
+                    )
                 except Exception:
                     detections = []
 
                 ann.detected_objects = {"objects": detections, "_checksum": ""}
-                ann.auto_labels = {"labels": detections}
+                ann.auto_labels = {"labels": detections, "batch_inferred": True}
                 ann.status = AnnotationStatus.AUTO_LABELED
                 processed += 1
 
@@ -579,22 +593,53 @@ async def _auto_label_annotations_async(annotation_ids: list[str]) -> dict:
                 failed += 1
                 continue
 
+            if progress_callback:
+                progress_callback(
+                    processed=processed,
+                    failed=failed,
+                    skipped=skipped,
+                    total=total,
+                    current=idx + 1,
+                )
+
         await db.commit()
 
-    return {"total": len(annotation_ids), "processed": processed, "failed": failed}
+    return {
+        "total": total,
+        "processed": processed,
+        "failed": failed,
+        "skipped": skipped,
+    }
 
 
 @shared_task(
+    bind=True,
     name="workers.auto_label_annotations",
     autoretry_for=(Exception,),
     max_retries=3,
     retry_backoff=True,
     retry_backoff_max=300,
 )
-def auto_label_annotations_task(annotation_ids: list[str]) -> dict:
+def auto_label_annotations_task(
+    self,
+    annotation_ids: list[str],
+    force: bool = False,
+    confidence_threshold: float = 0.45,
+) -> dict:
     try:
         logger.info("Running auto-labeling on %d annotations", len(annotation_ids))
-        summary = _run_async(_auto_label_annotations_async(annotation_ids))
+
+        def _progress(**meta):
+            self.update_state(state="PROGRESS", meta=meta)
+
+        summary = _run_async(
+            _auto_label_annotations_async(
+                annotation_ids,
+                force=force,
+                confidence_threshold=confidence_threshold,
+                progress_callback=_progress,
+            )
+        )
         logger.info("Auto-labeling completed for annotations: %s", summary)
         _run_async(
             _write_audit_log(
@@ -1245,6 +1290,8 @@ async def _auto_label_road_async(
     image_ids: list[str],
     conf_threshold: float = 0.35,
     iou_threshold: float = 0.45,
+    force: bool = False,
+    progress_callback=None,
 ) -> dict:
     import io
 
@@ -1267,14 +1314,29 @@ async def _auto_label_road_async(
 
     processed = 0
     failed = 0
+    skipped = 0
+    total = len(image_ids)
 
     async with async_session() as db:
-        for image_id in image_ids:
+        for idx, image_id in enumerate(image_ids):
             try:
                 annotation = await db.get(Annotation, image_id)
                 if annotation is None:
                     failed += 1
                     continue
+
+                existing = await db.execute(
+                    select(RoadAnnotation).where(RoadAnnotation.annotation_id == annotation.id)
+                )
+                existing_ra = existing.scalar_one_or_none()
+
+                if existing_ra is not None:
+                    if existing_ra.reviewed and not force:
+                        skipped += 1
+                        continue
+                    if not force:
+                        skipped += 1
+                        continue
 
                 from app.core.dependencies import get_minio_client_sync
                 mc = get_minio_client_sync()
@@ -1313,6 +1375,7 @@ async def _auto_label_road_async(
                     existing_ra.surface_type = surface_type
                     existing_ra.model_version = "yolov8n-seg-v1"
                     existing_ra.auto_generated = True
+                    existing_ra.reviewed = False
                 else:
                     ra = RoadAnnotation(
                         annotation_id=annotation.id,
@@ -1329,16 +1392,27 @@ async def _auto_label_road_async(
                 failed += 1
                 continue
 
+            if progress_callback:
+                progress_callback(
+                    processed=processed,
+                    failed=failed,
+                    skipped=skipped,
+                    total=total,
+                    current=idx + 1,
+                )
+
         await db.commit()
 
     return {
-        "total": len(image_ids),
+        "total": total,
         "processed": processed,
         "failed": failed,
+        "skipped": skipped,
     }
 
 
 @shared_task(
+    bind=True,
     name="workers.auto_label_road",
     autoretry_for=(Exception,),
     max_retries=3,
@@ -1346,17 +1420,29 @@ async def _auto_label_road_async(
     retry_backoff_max=300,
 )
 def auto_label_road_task(
+    self,
     image_ids: list[str],
     conf_threshold: float = 0.35,
     iou_threshold: float = 0.45,
+    force: bool = False,
 ) -> dict:
     try:
         logger.info(
             "Running road auto-labeling on %d images",
             len(image_ids),
         )
+
+        def _progress(**meta):
+            self.update_state(state="PROGRESS", meta=meta)
+
         summary = _run_async(
-            _auto_label_road_async(image_ids, conf_threshold, iou_threshold)
+            _auto_label_road_async(
+                image_ids,
+                conf_threshold,
+                iou_threshold,
+                force=force,
+                progress_callback=_progress,
+            )
         )
         logger.info("Road auto-labeling completed: %s", summary)
         _run_async(

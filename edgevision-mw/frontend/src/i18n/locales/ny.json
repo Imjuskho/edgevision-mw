@@ -630,6 +630,18 @@
     "fastReviewComplete": "Gulu la kuwunika mwachangu latumizidwa",
     "fastReviewSessionFailed": "Sikunathe kuyambitsa msonkhano wa kuwunika mwachangu"
   },
+  "batchInference": {
+    "inferRemaining": "Pezani zithunzi zotsala",
+    "inferRemainingRoad": "Pezani zithunzi zotsala",
+    "inferAll": "Lembani zithunzi zonse",
+    "running": "Kupeza kwambiri kukuchitika…",
+    "progress": "{{current}} / {{total}} zithunzi",
+    "complete": "Zatheka — zithunzi {{processed}} zalembedwa",
+    "failed": "Kupeza kwambiri kwalephera",
+    "noRemaining": "Zithunzi zonse zalembedwa kale",
+    "reviewHint": "Zatheka — onani chithunzi chilichonse ndi sungani kuti mutsimikizire",
+    "roadModelMissing": "Modeli ya msewu sinaphunzitsidwe — batch idzayenda modeli ikakhala"
+  },
   "roadSegmentation": {
     "title": "Kugawa Msewu",
     "autoSegment": "Pezani Mwango",

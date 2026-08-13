@@ -165,12 +165,42 @@ export const studioApi = {
       return_polygons: returnPolygons,
     }),
 
-  segmentRoadBatch: (imageIds: string[], confThreshold = 0.35, iouThreshold = 0.45) =>
+  segmentRoadBatch: (
+    imageIds: string[],
+    confThreshold = 0.35,
+    iouThreshold = 0.45,
+  ) =>
     api.post("/road/segment/batch", {
       image_ids: imageIds,
       conf_threshold: confThreshold,
       iou_threshold: iouThreshold,
     }),
+
+  segmentRoadDatasetBatch: (
+    datasetId: string,
+    options: { scope?: "remaining" | "all"; force?: boolean; confThreshold?: number; iouThreshold?: number } = {},
+  ) =>
+    api.post("/road/segment/batch", {
+      dataset_id: datasetId,
+      scope: options.scope ?? "remaining",
+      force: options.force ?? false,
+      conf_threshold: options.confThreshold ?? 0.35,
+      iou_threshold: options.iouThreshold ?? 0.45,
+    }),
+
+  prelabelDatasetBatch: (
+    datasetId: string,
+    options: { scope?: "remaining" | "all"; force?: boolean; confidenceThreshold?: number } = {},
+  ) =>
+    api.post("/studio/prelabel/batch", {
+      dataset_id: datasetId,
+      scope: options.scope ?? "remaining",
+      force: options.force ?? false,
+      confidence_threshold: options.confidenceThreshold ?? 0.45,
+    }),
+
+  getBatchJobStatus: (jobId: string) =>
+    api.get(`/studio/prelabel/jobs/${jobId}`),
 
   getRoadResult: (annotationId: string) =>
     api.get(`/road/result/${annotationId}`),

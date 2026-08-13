@@ -6,6 +6,7 @@ import { studioApi } from "../services/api";
 import type { ImageItem, BBox } from "../types";
 import AnnotationCanvas from "../components/AnnotationCanvas";
 import { AnnotateWorkspace, type WorkspaceDrawTool } from "../components/annotate/AnnotateWorkspace";
+import { BatchInferenceAction } from "../components/BatchInferenceAction";
 import { Button } from "../components/ui/Button";
 import { Modal } from "../components/ui/Modal";
 import { Badge } from "../components/ui/Badge";
@@ -347,6 +348,25 @@ export default function AnnotationPage({
           aiDraft ? (
             <Badge variant="info">{t("annotation.liveAiDraft", "AI prelabels — edit & save to confirm")}</Badge>
           ) : null
+        }
+        secondaryToolbarAction={
+          <BatchInferenceAction
+            mode="detection"
+            datasetId={datasetId}
+            disabled={saving || loadingAnnotations}
+            onComplete={(summary) => {
+              showToast(
+                t("batchInference.complete", {
+                  processed: (summary.processed as number) ?? 0,
+                }),
+                "success",
+              );
+              if (currentImage?.annotation_id) {
+                void loadAnnotations(currentImage.annotation_id);
+              }
+            }}
+            onError={(msg) => showToast(msg, "error")}
+          />
         }
       >
         <AnnotationCanvas

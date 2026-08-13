@@ -10,11 +10,12 @@ import { FabricPolygonManager } from "../components/RoadSegPanel/FabricPolygonMa
 import { FabricZoomRegistrar } from "../components/FabricZoomRegistrar";
 import { RoadSegPanel } from "../components/RoadSegPanel/RoadSegPanel";
 import { AnnotateWorkspace } from "../components/annotate/AnnotateWorkspace";
+import { BatchInferenceAction } from "../components/BatchInferenceAction";
 import { EmptyState } from "../components/ui/EmptyState";
 import { Badge } from "../components/ui/Badge";
 import { Select } from "../components/ui/Select";
 import { ROAD_CLASS_ARRAY, ROAD_CLASS_DISPLAY_NAMES } from "../constants/roadTaxonomy";
-import type { ImageItem, InstanceMask } from "../types";
+import type { ImageItem, InstanceMask, RoadSegAnnotation } from "../types";
 
 interface SegmentPageProps {
   sessionId: string;
@@ -66,6 +67,7 @@ export default function SegmentPage({
     acceptAll,
     rejectAll,
     clearInstances,
+    setAnnotations,
   } = useRoadSegmentation();
 
   useEffect(() => {
@@ -204,6 +206,40 @@ export default function SegmentPage({
     },
     [markDirty],
   );
+
+  const loadExistingRoadResult = useCallback(async () => {
+    if (!currentImage || !canvasReady) return;
+    clearInstances();
+    try {
+      const resp = await studioApi.getRoadResult(currentImage.annotation_id);
+      const data = resp.data as {
+        instances: InstanceMask[];
+        auto_generated: boolean;
+        reviewed: boolean;
+      };
+      if (!data.instances?.length || data.reviewed) return;
+
+      renderSegmentResults(data.instances);
+      const anns: RoadSegAnnotation[] = data.instances.map((inst) => ({
+        id: `road_batch_${inst.class_id}_${Math.random().toString(36).slice(2, 8)}`,
+        class_id: inst.class_id,
+        class_name: inst.class_name,
+        confidence: inst.confidence,
+        polygon: inst.polygon ?? [],
+        accepted: true,
+      }));
+      setAnnotations(anns);
+      if (data.auto_generated) {
+        setIsSegmentActive(true);
+      }
+    } catch {
+      // No road result yet — normal for unlabeled frames
+    }
+  }, [canvasReady, currentImage, clearInstances, renderSegmentResults, setAnnotations]);
+
+  useEffect(() => {
+    void loadExistingRoadResult();
+  }, [loadExistingRoadResult]);
 
   const handleAutoSegment = useCallback(async () => {
     if (!currentImage) return;
@@ -374,6 +410,18 @@ export default function SegmentPage({
       hideAutoLabel
       hideLabelSelector
       isDirty={false}
+      secondaryToolbarAction={
+        <BatchInferenceAction
+          mode="road"
+          datasetId={datasetId}
+          disabled={isSegmenting || isSaving}
+          onComplete={() => {
+            setSaveMessage(t("batchInference.reviewHint"));
+            void loadExistingRoadResult();
+          }}
+          onError={(msg) => setSaveMessage(msg)}
+        />
+      }
       saveStatus={
         saveMessage ? (
           <Badge variant={saveMessage === t("segment.savedSuccess") ? "success" : "warning"}>

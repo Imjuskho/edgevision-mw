@@ -160,22 +160,66 @@ async def segment_batch(
     db: AsyncSession = Depends(get_db),
     user: dict = Depends(get_current_user),
 ):
+    from app.ai.road_segmenter import get_road_segmenter
+    from app.services.batch_inference import resolve_batch_annotation_ids
     from app.workers.tasks import auto_label_road_task
+
+    if not request.dataset_id and not request.image_ids:
+        raise HTTPException(
+            status_code=400,
+            detail="Provide dataset_id or image_ids",
+        )
+
+    segmenter = await get_road_segmenter(
+        settings.ROAD_SEG_MODEL_PATH,
+        "gpu" if settings.ENVIRONMENT == "production" else "cpu",
+        db=db,
+    )
+    if not segmenter.is_loaded():
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Road segmentation model not available. "
+                "Train a road model with scripts/train_road_seg.py and set ROAD_SEG_MODEL_PATH "
+                "to models/road_seg/best.onnx. COCO-pretrained models are rejected."
+            ),
+        )
+
+    if request.dataset_id:
+        image_ids, skipped = await resolve_batch_annotation_ids(
+            db,
+            request.dataset_id,
+            image_ids=request.image_ids,
+            scope=request.scope,
+            mode="road",
+            force=request.force,
+        )
+    else:
+        image_ids = list(request.image_ids or [])
+        skipped = 0
+
+    if not image_ids:
+        raise HTTPException(
+            status_code=400,
+            detail="No unannotated images to process. All frames already have road annotations.",
+        )
 
     job_id = uuid4()
 
     auto_label_road_task.apply_async(
-        args=[[str(i) for i in request.image_ids]],
+        args=[[str(i) for i in image_ids]],
         kwargs={
             "conf_threshold": request.conf_threshold,
             "iou_threshold": request.iou_threshold,
+            "force": request.force,
         },
         task_id=str(job_id),
     )
 
     return RoadSegmentationBatchResponse(
         job_id=job_id,
-        total_images=len(request.image_ids),
+        total_images=len(image_ids),
+        skipped=skipped,
     )
 
 

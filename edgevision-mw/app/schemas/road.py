@@ -44,7 +44,17 @@ class RoadSegmentationResponse(BaseModel):
 
 
 class RoadSegmentationBatchRequest(BaseModel):
-    image_ids: list[UUID] = Field(..., min_length=1, max_length=50, description="Image IDs to segment")
+    dataset_id: str | None = Field(default=None, description="Dataset slug or UUID — resolves target frames")
+    image_ids: list[UUID] | None = Field(
+        default=None,
+        max_length=1000,
+        description="Explicit annotation IDs (optional when dataset_id is set)",
+    )
+    scope: Literal["remaining", "all"] = Field(
+        default="remaining",
+        description="remaining = unannotated only; all = every frame (still skips reviewed unless force)",
+    )
+    force: bool = Field(default=False, description="Re-run even when auto labels exist")
     conf_threshold: float = Field(default=0.35, ge=0.0, le=1.0)
     iou_threshold: float = Field(default=0.45, ge=0.0, le=1.0)
 
@@ -52,6 +62,7 @@ class RoadSegmentationBatchRequest(BaseModel):
 class RoadSegmentationBatchResponse(BaseModel):
     job_id: UUID = Field(..., description="Async job ID for tracking")
     total_images: int = Field(..., description="Number of images queued")
+    skipped: int = Field(default=0, description="Frames skipped (already annotated)")
 
 
 class RoadAnnotationUpdate(BaseModel):

@@ -4,8 +4,10 @@ Provides server-side YOLO-based auto-labeling for uploaded images.
 """
 from __future__ import annotations
 
+from typing import Literal
 from uuid import UUID, uuid4
 
+from celery.result import AsyncResult
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,7 +19,9 @@ from app.models.annotation import Annotation
 from app.models.dataset import Dataset
 from app.models.enums import AnnotationStatus
 from app.models.image import ImageRecord
+from app.services.batch_inference import resolve_batch_annotation_ids
 from app.services.prelabel import prelabel_image
+from app.workers.celery_app import celery_app
 
 prelabel_router = APIRouter(prefix="/studio/prelabel", tags=["prelabel"])
 
@@ -26,6 +30,32 @@ class PrelabelRequest(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     confidence_threshold: float = Field(default=0.45, ge=0.1, le=0.95)
+
+
+class PrelabelBatchRequest(BaseModel):
+    dataset_id: str = Field(..., description="Dataset slug or UUID")
+    image_ids: list[UUID] | None = Field(
+        default=None,
+        max_length=1000,
+        description="Optional subset of annotation IDs",
+    )
+    scope: Literal["remaining", "all"] = Field(default="remaining")
+    force: bool = Field(default=False)
+    confidence_threshold: float = Field(default=0.45, ge=0.1, le=0.95)
+
+
+class BatchJobResponse(BaseModel):
+    job_id: UUID
+    total_images: int
+    skipped: int = 0
+
+
+class BatchJobStatusResponse(BaseModel):
+    job_id: UUID
+    status: str
+    progress: dict | None = None
+    result: dict | None = None
+    error: str | None = None
 
 
 class PrelabelDetection(BaseModel):
@@ -133,3 +163,70 @@ async def prelabel_existing_image(
         detections=[PrelabelDetection(**d) for d in detections],
         count=len(detections),
     )
+
+
+@prelabel_router.post("/batch", response_model=BatchJobResponse)
+async def prelabel_batch(
+    request: PrelabelBatchRequest,
+    db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    """Run YOLO pre-labeling on all remaining unannotated frames in a dataset."""
+    from app.workers.tasks import auto_label_annotations_task
+
+    annotation_ids, skipped = await resolve_batch_annotation_ids(
+        db,
+        request.dataset_id,
+        image_ids=request.image_ids,
+        scope=request.scope,
+        mode="detection",
+        force=request.force,
+    )
+
+    if not annotation_ids:
+        raise HTTPException(
+            status_code=400,
+            detail="No unannotated images to process. All frames already have labels.",
+        )
+
+    job_id = uuid4()
+    auto_label_annotations_task.apply_async(
+        args=[[str(i) for i in annotation_ids]],
+        kwargs={
+            "force": request.force,
+            "confidence_threshold": request.confidence_threshold,
+        },
+        task_id=str(job_id),
+    )
+
+    return BatchJobResponse(
+        job_id=job_id,
+        total_images=len(annotation_ids),
+        skipped=skipped,
+    )
+
+
+@prelabel_router.get("/jobs/{job_id}", response_model=BatchJobStatusResponse)
+async def get_batch_job_status(
+    job_id: UUID,
+    user: dict = Depends(get_current_user),
+):
+    """Poll Celery batch job status (prelabel or road segmentation)."""
+    result = AsyncResult(str(job_id), app=celery_app)
+    meta = result.info if isinstance(result.info, dict) else None
+
+    if result.state == "PENDING":
+        return BatchJobStatusResponse(job_id=job_id, status="PENDING")
+    if result.state == "PROGRESS":
+        return BatchJobStatusResponse(
+            job_id=job_id,
+            status="RUNNING",
+            progress=meta,
+        )
+    if result.state == "FAILURE":
+        err = str(result.info) if result.info else "Job failed"
+        return BatchJobStatusResponse(job_id=job_id, status="FAILED", error=err)
+    if result.state == "SUCCESS":
+        payload = result.result if isinstance(result.result, dict) else {"result": result.result}
+        return BatchJobStatusResponse(job_id=job_id, status="COMPLETED", result=payload)
+    return BatchJobStatusResponse(job_id=job_id, status=result.state, progress=meta)

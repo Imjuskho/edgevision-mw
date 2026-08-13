@@ -281,7 +281,10 @@ export interface RoadSegmentationResponse {
 }
 
 export interface RoadSegmentationBatchRequest {
-  image_ids: string[];
+  dataset_id?: string;
+  image_ids?: string[];
+  scope?: "remaining" | "all";
+  force?: boolean;
   conf_threshold?: number;
   iou_threshold?: number;
 }
@@ -289,6 +292,41 @@ export interface RoadSegmentationBatchRequest {
 export interface RoadSegmentationBatchResponse {
   job_id: string;
   total_images: number;
+  skipped: number;
+}
+
+export interface PrelabelBatchRequest {
+  dataset_id: string;
+  image_ids?: string[];
+  scope?: "remaining" | "all";
+  force?: boolean;
+  confidence_threshold?: number;
+}
+
+export interface BatchJobResponse {
+  job_id: string;
+  total_images: number;
+  skipped: number;
+}
+
+export interface BatchJobStatusResponse {
+  job_id: string;
+  status: "PENDING" | "RUNNING" | "COMPLETED" | "FAILED" | string;
+  progress?: {
+    processed: number;
+    failed: number;
+    skipped: number;
+    total: number;
+    current: number;
+  };
+  result?: Record<string, unknown>;
+  error?: string;
+}
+
+export interface RoadSegmentationBatchRequestLegacy {
+  image_ids: string[];
+  conf_threshold?: number;
+  iou_threshold?: number;
 }
 
 export interface RoadAnnotationUpdate {

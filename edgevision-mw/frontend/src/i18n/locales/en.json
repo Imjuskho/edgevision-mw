@@ -757,6 +757,18 @@
     "fastReviewComplete": "Fast review batch submitted",
     "fastReviewSessionFailed": "Could not start fast review session"
   },
+  "batchInference": {
+    "inferRemaining": "Infer remaining frames",
+    "inferRemainingRoad": "Infer remaining frames",
+    "inferAll": "Auto-label all frames",
+    "running": "Batch inference running…",
+    "progress": "{{current}} / {{total}} frames",
+    "complete": "Batch complete — {{processed}} frames labeled",
+    "failed": "Batch inference failed",
+    "noRemaining": "All frames already have labels",
+    "reviewHint": "Batch complete — review each frame and save to confirm",
+    "roadModelMissing": "Road model not trained yet — batch will run once a model is deployed"
+  },
   "roadSegmentation": {
     "title": "Road Surface Segmentation",
     "subtitle": "Detect and classify road surface defects (potholes, cracks, surface type)",
