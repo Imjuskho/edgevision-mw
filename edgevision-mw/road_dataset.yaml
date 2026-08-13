@@ -1,8 +1,9 @@
 # YOLOv8-seg Dataset Configuration for Road Surface Instance Segmentation
 # Paths relative to this file or absolute
-path: /data/road_seg  # dataset root dir
-train: images/train   # train images
-val: images/val       # val images
+# Local extraction output (run scripts/extract_traffic_frames.py first):
+path: datasets/road_seg_traffic
+train: images/train
+val: images/val
 test: images/test     # test images (optional)
 
 # Number of classes
