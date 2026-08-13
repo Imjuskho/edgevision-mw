@@ -1321,74 +1321,75 @@ async def _auto_label_road_async(
     async with async_session() as db:
         for idx, image_id in enumerate(image_ids):
             try:
-                annotation = await db.get(Annotation, image_id)
-                if annotation is None:
-                    failed += 1
-                    continue
-
-                existing = await db.execute(
-                    select(RoadAnnotation).where(RoadAnnotation.annotation_id == annotation.id)
-                )
-                existing_ra = existing.scalar_one_or_none()
-
-                if existing_ra is not None:
-                    if existing_ra.reviewed and not force:
-                        skipped += 1
-                        continue
-                    if not force:
-                        skipped += 1
+                async with db.begin_nested():
+                    annotation = await db.get(Annotation, image_id)
+                    if annotation is None:
+                        failed += 1
                         continue
 
-                from app.core.dependencies import get_minio_client_sync
-                mc = get_minio_client_sync()
-
-                response = mc.get_object(
-                    settings.MINIO_BUCKET, annotation.image_path
-                )
-                pil_image = Image.open(io.BytesIO(response.read()))
-                if pil_image.mode != "RGB":
-                    pil_image = pil_image.convert("RGB")
-
-                image_np = np.array(pil_image)
-                results = segmenter.segment(image_np, conf_threshold, iou_threshold)
-
-                surface_type = classify_surface_type(results) if results else "unpaved"
-
-                existing = await db.execute(
-                    select(RoadAnnotation).where(RoadAnnotation.annotation_id == annotation.id)
-                )
-                existing_ra = existing.scalar_one_or_none()
-
-                instances_data = [
-                    {
-                        "class_id": r.class_id,
-                        "class_name": r.class_name,
-                        "confidence": r.confidence,
-                        "bbox": r.bbox,
-                        "mask_rle": r.mask_rle,
-                        "polygon": r.polygon,
-                    }
-                    for r in results
-                ]
-
-                if existing_ra:
-                    existing_ra.instances = instances_data
-                    existing_ra.surface_type = surface_type
-                    existing_ra.model_version = "yolov8n-seg-v1"
-                    existing_ra.auto_generated = True
-                    existing_ra.reviewed = False
-                else:
-                    ra = RoadAnnotation(
-                        annotation_id=annotation.id,
-                        surface_type=surface_type,
-                        instances=instances_data,
-                        model_version="yolov8n-seg-v1",
-                        auto_generated=True,
-                        reviewed=False,
+                    existing = await db.execute(
+                        select(RoadAnnotation).where(RoadAnnotation.annotation_id == annotation.id)
                     )
-                    db.add(ra)
+                    existing_ra = existing.scalar_one_or_none()
 
-                processed += 1
+                    if existing_ra is not None:
+                        if existing_ra.reviewed and not force:
+                            skipped += 1
+                            continue
+                        if not force:
+                            skipped += 1
+                            continue
+
+                    from app.core.dependencies import get_minio_client_sync
+                    mc = get_minio_client_sync()
+
+                    response = mc.get_object(
+                        settings.MINIO_BUCKET, annotation.image_path
+                    )
+                    pil_image = Image.open(io.BytesIO(response.read()))
+                    if pil_image.mode != "RGB":
+                        pil_image = pil_image.convert("RGB")
+
+                    image_np = np.array(pil_image)
+                    results = segmenter.segment(image_np, conf_threshold, iou_threshold)
+
+                    surface_type = classify_surface_type(results) if results else "unpaved"
+
+                    existing = await db.execute(
+                        select(RoadAnnotation).where(RoadAnnotation.annotation_id == annotation.id)
+                    )
+                    existing_ra = existing.scalar_one_or_none()
+
+                    instances_data = [
+                        {
+                            "class_id": r.class_id,
+                            "class_name": r.class_name,
+                            "confidence": r.confidence,
+                            "bbox": r.bbox,
+                            "mask_rle": r.mask_rle,
+                            "polygon": r.polygon,
+                        }
+                        for r in results
+                    ]
+
+                    if existing_ra:
+                        existing_ra.instances = instances_data
+                        existing_ra.surface_type = surface_type
+                        existing_ra.model_version = "yolov8n-seg-v1"
+                        existing_ra.auto_generated = True
+                        existing_ra.reviewed = False
+                    else:
+                        ra = RoadAnnotation(
+                            annotation_id=annotation.id,
+                            surface_type=surface_type,
+                            instances=instances_data,
+                            model_version="yolov8n-seg-v1",
+                            auto_generated=True,
+                            reviewed=False,
+                        )
+                        db.add(ra)
+
+                    processed += 1
             except Exception:
                 failed += 1
                 continue

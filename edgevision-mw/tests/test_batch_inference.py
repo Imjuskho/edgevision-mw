@@ -317,3 +317,112 @@ class TestJsonSafeBatchWrites:
         json.dumps(ann.detected_objects)
         json.dumps(ann.auto_labels)
         assert isinstance(ann.detected_objects["objects"][0]["confidence"], float)
+
+    @pytest.mark.asyncio
+    async def test_road_annotation_sanitizes_float32_instances(self, db_session):
+        ds, annotations = await _seed_dataset_with_annotations(db_session, count=1)
+        ann = annotations[0]
+
+        ra = RoadAnnotation(
+            annotation_id=ann.id,
+            surface_type="paved",
+            instances=[
+                {
+                    "class_id": 0,
+                    "class_name": "good_road",
+                    "confidence": np.float32(0.88),
+                    "bbox": [
+                        np.float32(0.1),
+                        np.float32(0.2),
+                        np.float32(0.3),
+                        np.float32(0.4),
+                    ],
+                    "mask_rle": "",
+                    "polygon": [
+                        [np.float32(0.11), np.float32(0.22)],
+                        [np.float32(0.33), np.float32(0.44)],
+                        [np.float32(0.55), np.float32(0.66)],
+                    ],
+                }
+            ],
+            model_version="yolov8n-seg-v1",
+            auto_generated=True,
+            reviewed=False,
+        )
+        db_session.add(ra)
+        await db_session.flush()
+
+        json.dumps(ra.instances)
+        inst = ra.instances[0]
+        assert isinstance(inst["confidence"], float)
+        assert all(isinstance(v, float) for v in inst["bbox"])
+        assert all(isinstance(pt[0], float) and isinstance(pt[1], float) for pt in inst["polygon"])
+
+    @pytest.mark.asyncio
+    async def test_auto_label_road_persists_numpy_instances(self, db_session):
+        import io
+
+        from PIL import Image
+
+        from app.ai.road_segmenter import InstanceMaskResult
+        from app.workers.tasks import _auto_label_road_async
+        from sqlalchemy import select
+
+        ds, annotations = await _seed_dataset_with_annotations(db_session, count=1)
+        ann = annotations[0]
+
+        numpy_results = [
+            InstanceMaskResult(
+                class_id=0,
+                class_name="good_road",
+                confidence=np.float32(0.91),
+                bbox=[
+                    np.float32(0.05),
+                    np.float32(0.1),
+                    np.float32(0.2),
+                    np.float32(0.15),
+                ],
+                mask_rle="",
+                polygon=[
+                    [np.float32(0.1), np.float32(0.2)],
+                    [np.float32(0.3), np.float32(0.4)],
+                    [np.float32(0.5), np.float32(0.6)],
+                ],
+            )
+        ]
+
+        buf = io.BytesIO()
+        Image.new("RGB", (64, 64), (128, 128, 128)).save(buf, format="JPEG")
+        image_bytes = buf.getvalue()
+
+        mock_mc = MagicMock()
+        mock_mc.get_object.return_value.read.return_value = image_bytes
+
+        mock_segmenter = MagicMock()
+        mock_segmenter.segment.return_value = numpy_results
+
+        with (
+            patch("app.core.dependencies.get_minio_client_sync", return_value=mock_mc),
+            patch("app.ai.road_segmenter.get_road_segmenter", return_value=mock_segmenter),
+            patch("app.core.database.async_session") as mock_session_factory,
+        ):
+            mock_session_factory.return_value.__aenter__.side_effect = [
+                db_session,
+                db_session,
+            ]
+            mock_session_factory.return_value.__aexit__.return_value = None
+
+            summary = await _auto_label_road_async([str(ann.id)], force=True)
+
+        assert summary["processed"] == 1
+        assert summary["failed"] == 0
+
+        result = await db_session.execute(
+            select(RoadAnnotation).where(RoadAnnotation.annotation_id == ann.id)
+        )
+        ra = result.scalar_one()
+        json.dumps(ra.instances)
+        inst = ra.instances[0]
+        assert isinstance(inst["confidence"], float)
+        assert all(isinstance(v, float) for v in inst["bbox"])
+        assert all(isinstance(pt[0], float) and isinstance(pt[1], float) for pt in inst["polygon"])

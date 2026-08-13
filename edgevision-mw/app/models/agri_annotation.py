@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import Boolean, ForeignKey, String
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, validates
 
 from app.core.database import Base, TimestampMixin
+from app.core.json_utils import json_safe
 
 
 class AgriAnnotation(TimestampMixin, Base):
@@ -36,3 +38,9 @@ class AgriAnnotation(TimestampMixin, Base):
     reviewed: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False
     )
+
+    @validates("instances")
+    def _sanitize_instances(self, key: str, value: Any) -> Any:
+        if value is None:
+            return value
+        return json_safe(value)
