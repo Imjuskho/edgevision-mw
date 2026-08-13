@@ -114,6 +114,26 @@ class TestIsCocoSegModel:
             assert is_coco_seg_model(str(model_path)) is False
 
 
+class TestModelInferenceRoadFallback:
+    def test_road_segmentation_does_not_fallback_to_coco_pt(self):
+        from app.ai.model_inference import _get_local_fallback_engine
+        from app.models.enums import ModelType
+
+        with (
+            patch("app.core.config.settings") as mock_settings,
+            patch("app.ai.road_segmenter.is_valid_road_seg_model", return_value=False),
+            patch("app.ai.model_inference.os.path.exists", return_value=False),
+        ):
+            mock_settings.ROAD_SEG_MODEL_PATH = ""
+            mock_settings.YOLOV8X_PATH = ""
+            mock_settings.YOLOV8_SEG_MODEL_PATH = ""
+            mock_settings.AGRI_CROP_SEG_MODEL_PATH = ""
+            mock_settings.AGRI_HEALTH_SEG_MODEL_PATH = ""
+            engine = _get_local_fallback_engine(ModelType.road_segmentation)
+            assert engine is not None
+            assert engine.__class__.__name__ == "SimpleFallbackEngine"
+
+
 class TestRoadSegmentEndpoint:
     @pytest.mark.asyncio
     async def test_segment_returns_503_when_no_road_model(self, test_client, db_session):

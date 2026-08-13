@@ -240,7 +240,24 @@ class RoadSegmenter:
             simplified = approximate_polygon(largest, tolerance=2.0)
             return [[float(p[1]) / orig_w, float(p[0]) / orig_h] for p in simplified]
         except ImportError:
+            pass
+        except Exception as exc:
+            logger.warning("road_segmenter_skimage_polygon_failed", error=str(exc))
+
+        contours, _ = cv2.findContours(
+            (mask_bin > 0.5).astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+        )
+        if not contours:
             return None
+        largest = max(contours, key=cv2.contourArea)
+        if cv2.contourArea(largest) < 10:
+            return None
+        epsilon = 0.005 * cv2.arcLength(largest, True)
+        approx = cv2.approxPolyDP(largest, epsilon, True)
+        if len(approx) < 3:
+            return None
+        pts = approx.reshape(-1, 2)
+        return [[float(x) / orig_w, float(y) / orig_h] for x, y in pts]
 
     def _encode_rle(self, mask_bin: np.ndarray) -> str:
         try:
@@ -260,7 +277,15 @@ class RoadSegmenter:
         iou_threshold: float,
     ) -> list[InstanceMaskResult]:
         predictions = outputs[0][0].transpose()
-        protos = outputs[1][0] if len(outputs) > 1 else None
+        protos_raw = outputs[1][0] if len(outputs) > 1 else None
+        protos = None
+        if protos_raw is not None:
+            if protos_raw.ndim == 3:
+                protos = protos_raw.reshape(protos_raw.shape[0], -1)
+            elif protos_raw.ndim == 4:
+                protos = protos_raw[0].reshape(protos_raw.shape[1], -1)
+            else:
+                protos = protos_raw
 
         class_ids: list[int] = []
         confidences: list[float] = []
@@ -269,13 +294,15 @@ class RoadSegmenter:
 
         for pred in predictions:
             scores = pred[4:-32] if protos is not None else pred[4:]
-            max_score = scores.max()
+            max_score = float(scores.max())
+            if max_score > 1.0:
+                max_score = 1.0 / (1.0 + np.exp(-max_score))
             if max_score < conf_threshold:
                 continue
             class_id = int(scores.argmax())
             if class_id >= ROAD_CLASS_COUNT:
                 continue
-            confidences.append(float(max_score))
+            confidences.append(max_score)
             class_ids.append(class_id)
 
             cx, cy, w, h = pred[0], pred[1], pred[2], pred[3]
@@ -310,8 +337,8 @@ class RoadSegmenter:
             if protos is not None and i < len(mask_coefficients):
                 try:
                     coeffs = mask_coefficients[i]
-                    masks_pred = np.dot(protos, coeffs)
-                    masks_pred = 1.0 / (1.0 + np.exp(-masks_pred))
+                    masks_pred = np.dot(coeffs, protos)
+                    masks_pred = 1.0 / (1.0 + np.exp(-np.clip(masks_pred, -50, 50)))
                     mask_sigmoid = masks_pred.reshape((self._input_height // 4, self._input_width // 4))
                     mask_full = cv2.resize(
                         mask_sigmoid,

@@ -356,7 +356,8 @@ def _get_local_fallback_engine(model_type: ModelType) -> BaseEngine | None:
     elif model_type == ModelType.classification:
         candidates = ["yolov8n-cls.pt", "yolov8x.pt"]
     elif model_type == ModelType.road_segmentation:
-        candidates = ["yolov8n-seg.pt", "yolov8x.pt"]
+        # Never fall back to COCO-pretrained weights for road segmentation.
+        candidates = []
     else:
         candidates = ["yolov8x.pt"]
 
@@ -369,6 +370,16 @@ def _get_local_fallback_engine(model_type: ModelType) -> BaseEngine | None:
     ]
     for configured_path in config_paths:
         if configured_path and os.path.exists(configured_path):
+            if model_type == ModelType.road_segmentation:
+                from app.ai.road_segmenter import is_valid_road_seg_model
+
+                if not is_valid_road_seg_model(configured_path):
+                    logger.error(
+                        "road_seg_model_rejected",
+                        path=configured_path,
+                        reason="COCO or invalid format",
+                    )
+                    continue
             engine = YOLODetector(configured_path)
             if engine.is_loaded():
                 _set_lkg(model_type, engine)

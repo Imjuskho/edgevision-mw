@@ -11,6 +11,7 @@ services:
     entrypoint: ["/code/entrypoint.sh"]
     volumes:
       - ./frontend/public/models:/code/frontend/public/models:ro
+      - ./models/road_seg:/code/models/road_seg:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -32,6 +33,7 @@ services:
       - .env
     volumes:
       - ./frontend/public/models:/code/frontend/public/models:ro
+      - ./models/road_seg:/code/models/road_seg:ro
     depends_on:
       postgres:
         condition: service_healthy

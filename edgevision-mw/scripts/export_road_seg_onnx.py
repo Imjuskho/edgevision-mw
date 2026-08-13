@@ -26,9 +26,9 @@ def parse_args():
     return parser.parse_args()
 
 
-def export_onnx(model: YOLO, output_path: str, imgsz: int, fp16: bool = False):
+def export_onnx(model: YOLO, output_path: str, imgsz: int, fp16: bool = False, dest_name: str = "best.onnx"):
     """Export model to ONNX format."""
-    model.export(
+    export_result = model.export(
         format="onnx",
         imgsz=[imgsz, imgsz],
         dynamic=True,
@@ -37,12 +37,15 @@ def export_onnx(model: YOLO, output_path: str, imgsz: int, fp16: bool = False):
     )
 
     suffix = "fp16" if fp16 else "fp32"
-    src = Path(model.ckpt_path).parent / "best.onnx"
-    dst = Path(output_path) / f"yolov8n-seg-{suffix}.onnx"
+    src = Path(export_result) if export_result else Path(model.ckpt_path).parent / "best.onnx"
+    if not src.exists():
+        src = Path(model.ckpt_path).with_suffix(".onnx")
+    dst = Path(output_path) / dest_name
     if src.exists():
         import shutil
-        shutil.copy(src, dst)
-        print(f"Exported ONNX model to: {dst} ({src.stat().st_size / 1e6:.1f} MB)")
+        if src.resolve() != dst.resolve():
+            shutil.copy(src, dst)
+        print(f"Exported ONNX model to: {dst} ({dst.stat().st_size / 1e6:.1f} MB)")
     else:
         print(f"Warning: ONNX file not found at {src}")
 

@@ -59,7 +59,7 @@ class Settings(BaseSettings):
 
     INSTALL_TRAINING_DEPS: bool = False
 
-    ROAD_SEG_MODEL_PATH: str = ""
+    ROAD_SEG_MODEL_PATH: str = "models/road_seg/best.onnx"
     ROAD_SEG_CONF_THRESHOLD: float = 0.35
 
     AGRI_CROP_SEG_MODEL_PATH: str = ""
