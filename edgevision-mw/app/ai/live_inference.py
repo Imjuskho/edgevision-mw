@@ -145,16 +145,7 @@ def maybe_estimate_depth(
         return None, False, True
 
 
-def _json_safe(value):
-    if isinstance(value, np.generic):
-        return value.item()
-    if isinstance(value, np.ndarray):
-        return value.tolist()
-    if isinstance(value, dict):
-        return {k: _json_safe(v) for k, v in value.items()}
-    if isinstance(value, (list, tuple)):
-        return [_json_safe(v) for v in value]
-    return value
+from app.core.json_utils import json_safe as _json_safe
 
 
 def build_annotations(tracked: list[dict]) -> list[dict]:

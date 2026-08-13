@@ -46,7 +46,7 @@ minio_data/
 *.onnx.cache
 *.pt
 .cache/
-models/
+/models/
 runs/
 Traffic Data/
 

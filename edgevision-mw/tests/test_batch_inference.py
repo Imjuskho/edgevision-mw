@@ -1,8 +1,11 @@
 """Tests for dataset-level batch inference helpers and API."""
 from __future__ import annotations
 
+import json
+from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
+import numpy as np
 import pytest
 
 from app.models.annotation import Annotation
@@ -216,3 +219,101 @@ class TestRoadBatchAPI:
         data = resp.json()
         assert data["total_images"] == 3
         mock_task.apply_async.assert_called_once()
+
+
+class TestJsonSafeBatchWrites:
+    def test_json_safe_converts_numpy_float32(self):
+        from app.core.json_utils import json_safe
+
+        payload = {
+            "objects": [
+                {
+                    "label": "car_private",
+                    "confidence": np.float32(0.91),
+                    "bbox": [
+                        np.float32(0.1),
+                        np.float64(0.2),
+                        np.int64(3),
+                        0.4,
+                    ],
+                    "mask": np.array([[0.0, 0.5], [1.0, 1.0]], dtype=np.float32),
+                }
+            ]
+        }
+
+        sanitized = json_safe(payload)
+        json.dumps(sanitized)
+
+        obj = sanitized["objects"][0]
+        assert isinstance(obj["confidence"], float)
+        assert all(isinstance(v, (int, float)) for v in obj["bbox"])
+        assert obj["mask"] == [[0.0, 0.5], [1.0, 1.0]]
+
+    @pytest.mark.asyncio
+    async def test_annotation_sanitizes_detected_objects_on_assign(self, db_session):
+        ds, annotations = await _seed_dataset_with_annotations(db_session, count=1)
+        ann = annotations[0]
+
+        ann.detected_objects = {
+            "objects": [
+                {
+                    "label": "car_private",
+                    "confidence": np.float32(0.87),
+                    "bbox": [np.float32(0.1), np.float32(0.2), np.float32(0.3), np.float32(0.4)],
+                }
+            ],
+            "_checksum": "",
+        }
+        ann.auto_labels = {
+            "labels": ann.detected_objects["objects"],
+            "batch_inferred": True,
+        }
+
+        await db_session.flush()
+        json.dumps(ann.detected_objects)
+        json.dumps(ann.auto_labels)
+
+        assert isinstance(ann.detected_objects["objects"][0]["confidence"], float)
+
+    @pytest.mark.asyncio
+    async def test_auto_label_annotations_persists_numpy_detections(self, db_session):
+        from app.workers.tasks import _auto_label_annotations_async
+
+        ds, annotations = await _seed_dataset_with_annotations(db_session, count=1)
+        ann = annotations[0]
+
+        numpy_detections = [
+            {
+                "label": "car_private",
+                "class_name": "car",
+                "confidence": np.float32(0.92),
+                "bbox": [
+                    np.float32(0.05),
+                    np.float32(0.1),
+                    np.float32(0.2),
+                    np.float32(0.15),
+                ],
+            }
+        ]
+
+        mock_mc = MagicMock()
+        mock_mc.get_object.return_value.read.return_value = b"fake-image-bytes"
+
+        with (
+            patch("app.core.dependencies.get_minio_client_sync", return_value=mock_mc),
+            patch("app.services.prelabel.prelabel_image", return_value=numpy_detections),
+            patch("app.core.database.async_session") as mock_session_factory,
+        ):
+            mock_session_factory.return_value.__aenter__.return_value = db_session
+            mock_session_factory.return_value.__aexit__.return_value = None
+
+            summary = await _auto_label_annotations_async([str(ann.id)])
+
+        assert summary["processed"] == 1
+        assert summary["failed"] == 0
+        await db_session.refresh(ann)
+        status = ann.status.value if hasattr(ann.status, "value") else ann.status
+        assert status == "AUTO_LABELED"
+        json.dumps(ann.detected_objects)
+        json.dumps(ann.auto_labels)
+        assert isinstance(ann.detected_objects["objects"][0]["confidence"], float)

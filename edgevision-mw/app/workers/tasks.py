@@ -557,37 +557,38 @@ async def _auto_label_annotations_async(
     async with async_session() as db:
         for idx, aid in enumerate(annotation_ids):
             try:
-                ann = await db.get(Annotation, aid)
-                if ann is None:
-                    failed += 1
-                    continue
+                async with db.begin_nested():
+                    ann = await db.get(Annotation, aid)
+                    if ann is None:
+                        failed += 1
+                        continue
 
-                if not force and ann.human_labels is not None:
-                    skipped += 1
-                    continue
+                    if not force and ann.human_labels is not None:
+                        skipped += 1
+                        continue
 
-                mc = get_minio_client_sync()
-                try:
-                    resp = mc.get_object(settings.MINIO_BUCKET, ann.image_path)
-                    data = resp.read()
-                except Exception:
-                    data = None
+                    mc = get_minio_client_sync()
+                    try:
+                        resp = mc.get_object(settings.MINIO_BUCKET, ann.image_path)
+                        data = resp.read()
+                    except Exception:
+                        data = None
 
-                if not data:
-                    failed += 1
-                    continue
+                    if not data:
+                        failed += 1
+                        continue
 
-                try:
-                    detections = prelabel_image(
-                        data, confidence_threshold=confidence_threshold
-                    )
-                except Exception:
-                    detections = []
+                    try:
+                        detections = prelabel_image(
+                            data, confidence_threshold=confidence_threshold
+                        )
+                    except Exception:
+                        detections = []
 
-                ann.detected_objects = {"objects": detections, "_checksum": ""}
-                ann.auto_labels = {"labels": detections, "batch_inferred": True}
-                ann.status = AnnotationStatus.AUTO_LABELED
-                processed += 1
+                    ann.detected_objects = {"objects": detections, "_checksum": ""}
+                    ann.auto_labels = {"labels": detections, "batch_inferred": True}
+                    ann.status = AnnotationStatus.AUTO_LABELED
+                    processed += 1
 
             except Exception:
                 failed += 1
