@@ -1,0 +1,139 @@
+/* EdgeVision Studio — app shell layout */
+
+.studio-root {
+  display: flex;
+  flex-direction: row;
+  height: 100vh;
+  overflow: hidden;
+  background: var(--bg-root);
+}
+
+.studio-sidebar {
+  width: var(--sidebar-w);
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-surface);
+  border-right: 1px solid var(--border-default);
+  z-index: 100;
+}
+
+.compact-sidebar .studio-sidebar,
+.sidebar-collapsed .studio-sidebar {
+  width: var(--sidebar-rail-w);
+}
+
+.studio-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  height: var(--topbar-h);
+  padding: 0 var(--space-4);
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border-default);
+  flex-shrink: 0;
+}
+
+.topbar-title {
+  flex: 1;
+  font-size: var(--text-body-size);
+  font-weight: 600;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+
+.topbar-search-trigger {
+  min-width: 200px;
+  max-width: 280px;
+}
+
+.content-area {
+  flex: 1;
+  overflow: auto;
+  background: var(--bg-content);
+  padding: var(--space-6);
+}
+
+.content-area__inner {
+  max-width: var(--content-max-w);
+  margin: 0 auto;
+}
+
+@media (max-width: 1024px) {
+  .studio-sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    transform: translateX(-100%);
+    transition: transform var(--dur-slow) var(--ease-out);
+    box-shadow: var(--shadow-lg);
+  }
+
+  .studio-sidebar.mobile-open {
+    transform: translateX(0);
+  }
+
+  .mobile-nav-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 90;
+    background: var(--bg-overlay);
+    border: none;
+    cursor: pointer;
+  }
+
+  .mobile-menu-btn {
+    display: inline-flex;
+  }
+
+  .sidebar-dataset {
+    display: none;
+  }
+
+  .topbar-dataset-select {
+    display: block;
+  }
+}
+
+@media (min-width: 1025px) {
+  .mobile-menu-btn {
+    display: none;
+  }
+
+  .topbar-dataset-select {
+    display: none;
+  }
+
+  .mobile-nav-backdrop {
+    display: none;
+  }
+}
+
+@media (max-width: 768px) {
+  .content-area {
+    padding: var(--space-4);
+  }
+
+  .topbar-search-trigger {
+    min-width: 0;
+    max-width: 140px;
+  }
+}

@@ -1,0 +1,19 @@
+services:
+  app:
+    build:
+      context: .
+      args:
+        INSTALL_TRAINING_DEPS: "true"
+    volumes:
+      - ./app:/code/app
+      - ./alembic:/code/alembic
+      - ./alembic.ini:/code/alembic.ini
+      - ./tests:/code/tests
+      - ./pyproject.toml:/code/pyproject.toml
+      - ./frontend/public/models:/code/frontend/public/models:ro
+    command: ["--reload"]
+
+  celery_worker:
+    build: .
+    volumes:
+      - ./app:/code/app

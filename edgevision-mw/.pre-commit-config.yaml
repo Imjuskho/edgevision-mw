@@ -1,0 +1,55 @@
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.6.0
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.11.0
+    hooks:
+      - id: mypy
+        args: [--ignore-missing-imports, --check-untyped-defs]
+        additional_dependencies:
+          - "pydantic"
+          - "sqlalchemy"
+          - "fastapi"
+          - "types-redis"
+          - "types-Pillow"
+          - "types-python-dateutil"
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-added-large-files
+        args: [--maxkb=500]
+
+  - repo: local
+    hooks:
+      - id: block-print
+        name: Block bare print() statements
+        entry: '(?<!\w)(?<!"")print\('
+        language: pygrep
+        types: [python]
+        exclude: "tests/|scripts/|Makefile"
+        args: ["--multiline"]
+
+      - id: block-todo
+        name: Block bare TODO/FIXME/HACK
+        entry: '(?i)\b(TODO|FIXME|HACK|XXX)\b'
+        language: pygrep
+        types: [python]
+        exclude: ".pre-commit-config.yaml"
+        args: ["--multiline"]
+
+      - id: pytest-smoke
+        name: Run pytest smoke (5s timeout)
+        entry: python -m pytest tests/ -x --no-header -q --timeout=5
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [manual]

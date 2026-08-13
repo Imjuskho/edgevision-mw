@@ -1,0 +1,22 @@
+# YOLOv8-seg Dataset Configuration for Road Surface Instance Segmentation
+# Paths relative to this file or absolute
+path: /data/road_seg  # dataset root dir
+train: images/train   # train images
+val: images/val       # val images
+test: images/test     # test images (optional)
+
+# Number of classes
+nc: 7
+
+# Class names
+names:
+  0: good_road
+  1: pothole
+  2: crack
+  3: dust_road
+  4: gravel_road
+  5: road_marking
+  6: shoulder
+
+# Download (optional) — not used for local data
+download: ""
