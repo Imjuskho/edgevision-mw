@@ -63,7 +63,7 @@ export class FabricPolygonManager {
   private bindEvents(): void {
     this.canvas.on("mouse:down", (opt: TPointerEventInfo<TPointerEvent>) => {
       if (this.mode !== "draw_polygon") return;
-      const pointer = this.canvas.getPointer(opt.e);
+      const pointer = this.canvas.getScenePoint(opt.e);
       this.addVertex(pointer.x, pointer.y);
     });
 
@@ -75,12 +75,9 @@ export class FabricPolygonManager {
   }
 
   private addVertex(x: number, y: number): void {
-    const pointer = this.canvas.getPointer(
-      new MouseEvent("mousedown", { clientX: x, clientY: y })
-    );
-    this.activePolygon.points.push({ x: pointer.x, y: pointer.y });
+    this.activePolygon.points.push({ x, y });
 
-    const point = this.createVertexHandle(pointer.x, pointer.y, "#ff0");
+    const point = this.createVertexHandle(x, y, "#ff0");
     this.canvas.add(point);
     this.vertexHandles.push(point);
 

@@ -19,7 +19,7 @@
   "dependencies": {
     "axios": "^1.7.0",
     "dexie": "^4.0.7",
-    "fabric": "^6.4.0",
+    "fabric": "^7.4.0",
     "i18next": "^23.11.5",
     "lucide-react": "^1.31.0",
     "onnxruntime-web": "^1.18.0",

@@ -367,7 +367,7 @@ export default function AnnotationCanvas({
       if (opt.target && (opt.target as Rect & { _isBox?: boolean })._isBox) return;
 
       drawingRef.current = true;
-      const pointer = canvas.getPointer(opt.e);
+      const pointer = canvas.getScenePoint(opt.e);
       startRef.current = { x: pointer.x, y: pointer.y };
 
       const rect = new Rect({
@@ -395,7 +395,7 @@ export default function AnnotationCanvas({
       const canvas = fabricRef.current;
       if (!canvas) return;
 
-      const pointer = canvas.getPointer(opt.e);
+      const pointer = canvas.getScenePoint(opt.e);
       const x = Math.min(startRef.current.x, pointer.x);
       const y = Math.min(startRef.current.y, pointer.y);
       const w = Math.abs(pointer.x - startRef.current.x);

@@ -122,8 +122,7 @@ export default function SegmentPage({
         1
       );
       fImg.scale(scale);
-      canvas.setWidth(img.width * scale);
-      canvas.setHeight(img.height * scale);
+      canvas.setDimensions({ width: img.width * scale, height: img.height * scale });
       canvas.add(fImg);
       canvas.renderAll();
 
