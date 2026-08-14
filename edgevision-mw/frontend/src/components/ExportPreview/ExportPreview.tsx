@@ -62,7 +62,7 @@ export const ExportPreview: React.FC<Props> = ({ datasetId, onNavigate: _onNavig
   const [buildJobId, setBuildJobId] = useState<string | null>(null);
   const [buildStatus, setBuildStatus] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
-  const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     return () => {
