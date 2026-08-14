@@ -2,13 +2,11 @@ import hashlib
 import secrets
 from datetime import UTC, datetime, timedelta
 
+import bcrypt
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 from jose import jwt
-from passlib.context import CryptContext
 
 from app.core.config import settings
-
-_pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 def create_access_token(data: dict, expires_delta: timedelta | None = None) -> str:
@@ -25,11 +23,14 @@ def decode_access_token(token: str) -> dict:
 
 
 def hash_password(password: str) -> str:
-    return _pwd_context.hash(password)
+    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
 
 def verify_password(password: str, hashed: str) -> bool:
-    return _pwd_context.verify(password, hashed)
+    try:
+        return bcrypt.checkpw(password.encode("utf-8"), hashed.encode("utf-8"))
+    except ValueError:
+        return False
 
 
 API_KEY_BCRYPT_ROUNDS = 12
@@ -49,11 +50,16 @@ def generate_api_key_pair() -> tuple[str, str, str]:
 
 
 def hash_api_key_bcrypt(plaintext: str) -> str:
-    return _pwd_context.hash(plaintext)
+    return bcrypt.hashpw(
+        plaintext.encode("utf-8"), bcrypt.gensalt(rounds=API_KEY_BCRYPT_ROUNDS)
+    ).decode("utf-8")
 
 
 def verify_api_key_bcrypt(plaintext: str, hashed: str) -> bool:
-    return _pwd_context.verify(plaintext, hashed)
+    try:
+        return bcrypt.checkpw(plaintext.encode("utf-8"), hashed.encode("utf-8"))
+    except ValueError:
+        return False
 
 
 def hash_api_key(key: str) -> str:
