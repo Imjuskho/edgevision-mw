@@ -143,15 +143,18 @@ export const HealthDashboard: React.FC<Props> = ({ datasetId, onNavigate }) => {
                 paddingAngle={4}
                 dataKey="percentage"
                 nameKey="class_name"
-                label={({ class_name, percentage }) => `${class_name}: ${percentage.toFixed(0)}%`}
+                label={(props) => {
+                  const row = props.payload as ClassData;
+                  return `${row.class_name}: ${Number(props.value).toFixed(0)}%`;
+                }}
               >
                 {classDist.map((_, index) => (
                   <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                 ))}
               </Pie>
               <Tooltip
-                formatter={(value: number, _name: string, props: any) => [
-                  `${value.toFixed(1)}% (${props.payload.count} images)`,
+                formatter={(value, _name, props: any) => [
+                  `${Number(value).toFixed(1)}% (${props.payload.count} images)`,
                   props.payload.class_name,
                 ]}
               />
@@ -165,7 +168,7 @@ export const HealthDashboard: React.FC<Props> = ({ datasetId, onNavigate }) => {
               <YAxis dataKey="class_name" type="category" stroke="#e2e8f0" width={70} />
               <Tooltip
                 contentStyle={{ background: "#1e293b", border: "1px solid #334155" }}
-                formatter={(value: number) => [`${value.toFixed(1)}%`, "Current"]}
+                formatter={(value) => [`${Number(value).toFixed(1)}%`, "Current"]}
               />
               <Bar dataKey="percentage" fill="#60a5fa" radius={[0, 4, 4, 0]} />
             </BarChart>
