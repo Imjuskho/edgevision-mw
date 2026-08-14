@@ -101,11 +101,11 @@ export default defineConfig({
     chunkSizeWarningLimit: 2000,
     rollupOptions: {
       output: {
-        manualChunks: {
-          "onnx-runtime": ["onnxruntime-web"],
-          fabric: ["fabric"],
-          charts: ["recharts"],
-          i18n: ["i18next", "react-i18next"],
+        manualChunks(id: string) {
+          if (id.includes("onnxruntime-web")) return "onnx-runtime";
+          if (id.includes("node_modules/fabric")) return "fabric";
+          if (id.includes("recharts")) return "charts";
+          if (id.includes("i18next")) return "i18n";
         },
       },
     },
