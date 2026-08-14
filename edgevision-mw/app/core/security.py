@@ -3,8 +3,8 @@ import secrets
 from datetime import UTC, datetime, timedelta
 
 import bcrypt
+import jwt
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
-from jose import jwt
 
 from app.core.config import settings
 
