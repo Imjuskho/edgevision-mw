@@ -56,7 +56,7 @@ export interface LiveAnnotationResult {
 }
 
 interface UseLiveAnnotationOptions {
-  videoRef: React.RefObject<HTMLVideoElement>;
+  videoRef: React.RefObject<HTMLVideoElement | null>;
   enabled: boolean;
   modelType?: string;
   mirrored?: boolean;
@@ -86,7 +86,7 @@ export function useLiveAnnotation({
   const [depthAvailable, setDepthAvailable] = useState(false);
   const [effectiveFps, setEffectiveFps] = useState(initialFps);
   const wsRef = useRef<WebSocket | null>(null);
-  const intervalRef = useRef<ReturnType<typeof setInterval>>();
+  const intervalRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
   const inferencingRef = useRef(false);
   const pendingSendRef = useRef(false);
   const mirroredRef = useRef(mirrored);
