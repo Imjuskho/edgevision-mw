@@ -108,7 +108,7 @@ services:
     restart: unless-stopped
 
   minio:
-    image: minio/minio:RELEASE.2024-09-22T00-33-43Z
+    image: quay.io/minio/aistor/minio:RELEASE.2026-03-26T21-24-40Z
     ports:
       - "9000:9000"
       - "9001:9001"
