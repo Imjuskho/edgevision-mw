@@ -31,6 +31,22 @@ docker compose exec app alembic upgrade head
 docker compose exec app pytest tests/ -v
 ```
 
+## Support / Donate
+
+This project is built and maintained in Malawi. If it helps you and you would like
+to support the team behind it, any contribution is hugely appreciated.
+
+**EFT / Direct bank transfer**
+
+| Field | Details |
+|-------|---------|
+| Bank | National Bank of Malawi |
+| Account name | PHANGA CREATIVES |
+| Account number | 1005100832 |
+| Transfer type | EFT (Electronic Funds Transfer) |
+
+More donation options (GitHub Sponsors, PayPal, etc.) coming soon.
+
 ## Note on Git LFS
 
 Large local artifacts (Python `wheelhouse/`, local image datasets, and the Celery
