@@ -1,4 +1,5 @@
 """Sliding window rate limiter — Redis-backed with in-memory fallback."""
+
 from __future__ import annotations
 
 import hashlib
@@ -25,6 +26,15 @@ RATE_LIMIT_RULES: dict[str, RateLimitRule] = {
     "/datasets/search": RateLimitRule(max_requests=100, window_seconds=60),
     "/datasets/quotes": RateLimitRule(max_requests=20, window_seconds=60),
     "/exports": RateLimitRule(max_requests=5, window_seconds=60),
+    # D1: Operator endpoints
+    "/operator/auth/otp-request": RateLimitRule(max_requests=5, window_seconds=300),
+    "/operator/auth/otp-verify": RateLimitRule(max_requests=10, window_seconds=300),
+    # D2: Buyer dashboard
+    "/buyer/reports": RateLimitRule(max_requests=20, window_seconds=60),
+    "/buyer/invoices": RateLimitRule(max_requests=30, window_seconds=60),
+    # D3: Subject portal — sensitive, tight limits
+    "/subject/lookup": RateLimitRule(max_requests=5, window_seconds=300),
+    "/subject/withdraw": RateLimitRule(max_requests=3, window_seconds=3600),
 }
 
 _HEALTH_PATH = "/health"

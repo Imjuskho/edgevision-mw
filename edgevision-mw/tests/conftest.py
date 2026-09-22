@@ -23,6 +23,32 @@ os.environ["MINIO_ENDPOINT"] = "localhost:9000"
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import create_access_token
+from app.models.enums import NodeCategory, NodeStatus, PIIMode
+from app.models.node import Node
+
+
+async def _create_node(db: AsyncSession, status: NodeStatus = NodeStatus.ONLINE, *, node_id: str | None = None, district: str = "Blantyre") -> Node:
+    node = Node(
+        id=uuid4(),
+        node_id=node_id or f"NODE-{uuid4().hex[:8]}",
+        district=district,
+        latitude=-15.7861,
+        longitude=35.0058,
+        category=NodeCategory.ROAD,
+        hardware_profile={"gpu": "jetson"},
+        network_config={"apn": "airtel"},
+        capture_schedule="*/10 * * * *",
+        interest_classes=["vehicle"],
+        pii_mode=PIIMode.STRICT,
+        firmware_version="1.0.0",
+        public_key=b"\x01" * 32,
+        status=status,
+        is_enabled=True,
+    )
+    db.add(node)
+    await db.commit()
+    await db.refresh(node)
+    return node
 
 
 def _make_test_engine():
@@ -55,9 +81,7 @@ async def db_session() -> AsyncGenerator[AsyncSession, None]:
 @pytest_asyncio.fixture
 async def db_session_factory():
     engine = _make_test_engine()
-    factory = async_sessionmaker(
-        class_=AsyncSession, bind=engine, expire_on_commit=False
-    )
+    factory = async_sessionmaker(class_=AsyncSession, bind=engine, expire_on_commit=False)
     yield factory
     await engine.dispose()
 

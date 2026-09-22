@@ -182,6 +182,16 @@ export function DashboardHome({
         />
       )}
 
+      {!persona.showMarketplacePlaceholder && persona.persona === "BUYER" && (
+        <section className="dash-persona-panel dash-persona-panel--buyer">
+          <h2>{t("marketplace.title", "Dataset Marketplace")}</h2>
+          <p className="text-secondary">{t("home.buyerBody", "Browse and license certified datasets from Malawi field captures.")}</p>
+          <Button variant="primary" onClick={() => onNavigate("datasets")}>
+            {t("marketplace.browse", "Browse Marketplace")}
+          </Button>
+        </section>
+      )}
+
       {!persona.showMarketplacePlaceholder && persona.persona === "ANNOTATOR" && (
         <section className="dash-persona-panel dash-persona-panel--annotator">
           <h2>{t("home.annotatorToday", "Today's work")}</h2>

@@ -32,8 +32,13 @@ class InstanceMaskResult:
 
 
 ROAD_CLASS_NAMES = [
-    "good_road", "pothole", "crack", "dust_road",
-    "gravel_road", "road_marking", "shoulder",
+    "good_road",
+    "pothole",
+    "crack",
+    "dust_road",
+    "gravel_road",
+    "road_marking",
+    "shoulder",
 ]
 
 ROAD_CLASS_COUNT = len(ROAD_CLASS_NAMES)
@@ -64,9 +69,7 @@ def is_coco_seg_model(model_path: str) -> bool:
         if "coco" in description:
             return True
         names_raw = meta.get("names", "")
-        if isinstance(names_raw, str) and names_raw and (
-            names_raw.count(":") >= 79 or "person" in names_raw
-        ):
+        if isinstance(names_raw, str) and names_raw and (names_raw.count(":") >= 79 or "person" in names_raw):
             return True
     except Exception as exc:
         logger.warning("road_seg_coco_check_failed", model_path=model_path, error=str(exc))
@@ -128,7 +131,9 @@ class RoadSegmenter:
         try:
             import onnxruntime
 
-            providers = ["CUDAExecutionProvider", "CPUExecutionProvider"] if self._device == "gpu" else ["CPUExecutionProvider"]
+            providers = (
+                ["CUDAExecutionProvider", "CPUExecutionProvider"] if self._device == "gpu" else ["CPUExecutionProvider"]
+            )
             available = onnxruntime.get_available_providers()
             providers = [p for p in providers if p in available]
             self._session = InferenceSession(model_path, options, providers=providers)
@@ -186,7 +191,7 @@ class RoadSegmenter:
         canvas = np.full((input_h, input_w, 3), 114, dtype=np.uint8)
         dx = (input_w - nw) // 2
         dy = (input_h - nh) // 2
-        canvas[dy:dy + nh, dx:dx + nw] = resized
+        canvas[dy : dy + nh, dx : dx + nw] = resized
 
         self._letterbox = LetterboxParams(
             scale=scale,
@@ -225,7 +230,7 @@ class RoadSegmenter:
             return cv2.resize(mask_sigmoid, (mask_sigmoid.shape[1], mask_sigmoid.shape[0]))
 
         mask_2d = mask_sigmoid.reshape((self._input_height, self._input_width))
-        cropped = mask_2d[lb.dy:lb.dy + lb.nh, lb.dx:lb.dx + lb.nw]
+        cropped = mask_2d[lb.dy : lb.dy + lb.nh, lb.dx : lb.dx + lb.nw]
         return cv2.resize(cropped, (lb.orig_w, lb.orig_h), interpolation=cv2.INTER_LINEAR)
 
     def _extract_polygon(self, mask_bin: np.ndarray, orig_w: int, orig_h: int) -> list[list[float]] | None:
@@ -244,9 +249,7 @@ class RoadSegmenter:
         except Exception as exc:
             logger.warning("road_segmenter_skimage_polygon_failed", error=str(exc))
 
-        contours, _ = cv2.findContours(
-            (mask_bin > 0.5).astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
-        )
+        contours, _ = cv2.findContours((mask_bin > 0.5).astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         if not contours:
             return None
         largest = max(contours, key=cv2.contourArea)
@@ -361,14 +364,16 @@ class RoadSegmenter:
 
             class_name = ROAD_CLASS_NAMES[cid] if cid < len(ROAD_CLASS_NAMES) else f"class_{cid}"
 
-            results.append(InstanceMaskResult(
-                class_id=cid,
-                class_name=class_name,
-                confidence=conf,
-                bbox=bbox,
-                mask_rle=mask_rle,
-                polygon=polygon,
-            ))
+            results.append(
+                InstanceMaskResult(
+                    class_id=cid,
+                    class_name=class_name,
+                    confidence=conf,
+                    bbox=bbox,
+                    mask_rle=mask_rle,
+                    polygon=polygon,
+                )
+            )
 
         return results
 
@@ -433,10 +438,12 @@ def resolve_road_seg_model_path(explicit_path: str | None = None) -> str | None:
         if raw:
             candidates.append(Path(raw))
 
-    candidates.extend([
-        repo_root / "models/road_seg/best.onnx",
-        repo_root / "models/road_seg/weights/best.onnx",
-    ])
+    candidates.extend(
+        [
+            repo_root / "models/road_seg/best.onnx",
+            repo_root / "models/road_seg/weights/best.onnx",
+        ]
+    )
 
     for candidate in candidates:
         if candidate.exists() and is_valid_road_seg_model(str(candidate)):

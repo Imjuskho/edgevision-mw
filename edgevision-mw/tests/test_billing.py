@@ -15,9 +15,12 @@ from app.services.catalog import generate_quote
 
 async def _create_buyer(db, credit=Decimal("1000.00"), dpa_signed=True):
     user = User(
-        id=uuid4(), email=f"buyer-{uuid4().hex[:6]}@test.com",
-        hashed_password="x" * 60, full_name="Test Buyer",
-        role="BUYER", dpa_signed=dpa_signed,
+        id=uuid4(),
+        email=f"buyer-{uuid4().hex[:6]}@test.com",
+        hashed_password="x" * 60,
+        full_name="Test Buyer",
+        role="BUYER",
+        dpa_signed=dpa_signed,
         credit_balance_usd=credit,
     )
     db.add(user)
@@ -27,15 +30,23 @@ async def _create_buyer(db, credit=Decimal("1000.00"), dpa_signed=True):
 
 async def _create_ready_dataset(db, buyer_id=None):
     ds = Dataset(
-        id=uuid4(), dataset_id=f"DS-{uuid4().hex[:6]}",
-        name="Billing Test Dataset", version="1.0",
-        status=DatasetStatus.FOR_SALE, sample_count=100,
-        classes={"vehicle": 1}, annotations_per_image=2.0,
-        image_width=1920, image_height=1080,
+        id=uuid4(),
+        dataset_id=f"DS-{uuid4().hex[:6]}",
+        name="Billing Test Dataset",
+        version="1.0",
+        status=DatasetStatus.FOR_SALE,
+        sample_count=100,
+        classes={"vehicle": 1},
+        annotations_per_image=2.0,
+        image_width=1920,
+        image_height=1080,
         geographic_coverage={"districts": ["Lilongwe"]},
-        demographic_report={}, consent_coverage_pct=0.95,
-        pii_scrub_verified=True, iaa_score=0.85,
-        formats=["COCO"], price_usd=Decimal("500.00"),
+        demographic_report={},
+        consent_coverage_pct=0.95,
+        pii_scrub_verified=True,
+        iaa_score=0.85,
+        formats=["COCO"],
+        price_usd=Decimal("500.00"),
         license_type=LicenseType.ANNUAL,
     )
     db.add(ds)
@@ -46,19 +57,34 @@ async def _create_ready_dataset(db, buyer_id=None):
 
 @pytest.mark.asyncio
 async def test_request_export_checks_dpa_and_credits(db_session):
+    from fastapi import HTTPException
+
     buyer = await _create_buyer(db_session)
     ds = await _create_ready_dataset(db_session)
 
-    export_data = {
-        "buyer_id": str(buyer.id),
-        "dataset_id": str(ds.id),
-        "license_type": "ANNUAL",
-    }
-    try:
-        export = await initiate_export(db_session, export_data=export_data)
-        assert export is not None
-    except Exception as e:
-        assert "dpa" in str(e).lower() or "credit" in str(e).lower() or "402" in str(e)
+    export = await initiate_export(
+        db_session,
+        export_data={"buyer_id": str(buyer.id), "dataset_id": ds.dataset_id, "license_type": "ANNUAL"},
+    )
+    assert export is not None
+
+    poor = await _create_buyer(db_session, credit=Decimal("10.00"))
+    with pytest.raises(HTTPException) as excinfo:
+        await initiate_export(
+            db_session,
+            export_data={"buyer_id": str(poor.id), "dataset_id": ds.dataset_id, "license_type": "ANNUAL"},
+        )
+    assert excinfo.value.status_code == 402
+    assert "credit" in str(excinfo.value.detail).lower()
+
+    nodpa = await _create_buyer(db_session, dpa_signed=False)
+    with pytest.raises(HTTPException) as excinfo:
+        await initiate_export(
+            db_session,
+            export_data={"buyer_id": str(nodpa.id), "dataset_id": ds.dataset_id, "license_type": "ANNUAL"},
+        )
+    assert excinfo.value.status_code == 402
+    assert "dpa" in str(excinfo.value.detail).lower()
 
 
 @pytest.mark.asyncio
@@ -67,26 +93,22 @@ async def test_list_exports_filters_by_buyer(db_session):
     buyer2 = await _create_buyer(db_session)
 
     for buyer in [buyer1, buyer2]:
-        try:
-            ds = await _create_ready_dataset(db_session)
-            await initiate_export(db_session, export_data={
+        ds = await _create_ready_dataset(db_session)
+        await initiate_export(
+            db_session,
+            export_data={
                 "buyer_id": str(buyer.id),
-                "dataset_id": str(ds.id),
+                "dataset_id": ds.dataset_id,
                 "license_type": "ANNUAL",
-            })
-        except Exception:
-            pass
+            },
+        )
 
-    exports1 = await db_session.execute(
-        select(Export).where(Export.buyer_id == buyer1.id)
-    )
-    exports2 = await db_session.execute(
-        select(Export).where(Export.buyer_id == buyer2.id)
-    )
+    exports1 = await db_session.execute(select(Export).where(Export.buyer_id == buyer1.id))
+    exports2 = await db_session.execute(select(Export).where(Export.buyer_id == buyer2.id))
     list1 = exports1.scalars().all()
     list2 = exports2.scalars().all()
 
-    assert len(list1) == len(list2), "Exports should be filtered by buyer"
+    assert len(list1) == len(list2) == 1, "Each buyer should have exactly one export"
 
 
 @pytest.mark.asyncio
@@ -99,11 +121,13 @@ async def test_decimal_precision_survives_roundtrip(db_session):
     ds = await _create_ready_dataset(db_session)
 
     # Calculate price using the Decimal-based function
-    price = calculate_price({
-        "sample_count": 3,
-        "license_type": "ANNUAL",
-        "complexity": 1.0,
-    })
+    price = calculate_price(
+        {
+            "sample_count": 3,
+            "license_type": "ANNUAL",
+            "complexity": 1.0,
+        }
+    )
     # 3 * 1.0 * 0.30 = 0.90 exactly
     assert price == Decimal("0.90"), f"Expected exact Decimal 0.90, got {price}"
     assert isinstance(price, Decimal), f"Expected Decimal type, got {type(price)}"
@@ -114,11 +138,14 @@ async def test_decimal_precision_survives_roundtrip(db_session):
     assert ds.price_usd == Decimal("500.00")
 
     # Verify quote pricing uses Decimal
-    quote = await generate_quote(db_session, quote_request={
-        "dataset_id": ds.dataset_id,
-        "license_type": "PERPETUAL",
-        "jurisdiction": "MW",
-    })
+    quote = await generate_quote(
+        db_session,
+        quote_request={
+            "dataset_id": ds.dataset_id,
+            "license_type": "PERPETUAL",
+            "jurisdiction": "MW",
+        },
+    )
     # PERPETUAL multiplier is 1.5, MW premium is 1.0
     # 500.00 * 1.5 * 1.0 = 750.00
     assert quote.total_price_usd == Decimal("750.00"), f"Expected 750.00, got {quote.total_price_usd}"
@@ -130,7 +157,7 @@ async def test_decimal_precision_survives_roundtrip(db_session):
 async def test_revenue_breakdown(db_session):
     breakdown = await get_revenue_breakdown(db_session)
 
-    assert hasattr(breakdown, 'total_revenue_usd') or isinstance(breakdown, dict)
+    assert hasattr(breakdown, "total_revenue_usd") or isinstance(breakdown, dict)
     if isinstance(breakdown, dict):
         assert "total_revenue_usd" in breakdown
         assert breakdown["total_revenue_usd"] >= 0
@@ -140,18 +167,22 @@ async def test_revenue_breakdown(db_session):
 
 @pytest.mark.asyncio
 async def test_export_requires_dpa_signed(db_session):
+    from fastapi import HTTPException
+
     buyer = await _create_buyer(db_session, dpa_signed=False)
     ds = await _create_ready_dataset(db_session)
 
-    try:
-        export = await initiate_export(db_session, export_data={
-            "buyer_id": str(buyer.id),
-            "dataset_id": str(ds.id),
-            "license_type": "ANNUAL",
-        })
-        assert export is not None
-    except Exception as e:
-        assert "dpa" in str(e).lower() or "credit" in str(e).lower()
+    with pytest.raises(HTTPException) as excinfo:
+        await initiate_export(
+            db_session,
+            export_data={
+                "buyer_id": str(buyer.id),
+                "dataset_id": ds.dataset_id,
+                "license_type": "ANNUAL",
+            },
+        )
+    assert excinfo.value.status_code == 402
+    assert "dpa" in str(excinfo.value.detail).lower()
 
 
 @pytest.mark.asyncio
@@ -160,14 +191,11 @@ async def test_celery_task_triggered_for_batch_processing(db_session):
 
     from app.workers.tasks import process_batch_task
 
-    try:
-        with patch.object(process_batch_task, "delay") as mock_delay:
-            mock_delay.return_value = uuid4()
-            result = process_batch_task.delay(str(uuid4()))
-            assert result is not None
-            mock_delay.assert_called_once()
-    except Exception:
-        pass
+    with patch.object(process_batch_task, "delay") as mock_delay:
+        mock_delay.return_value = uuid4()
+        result = process_batch_task.delay(str(uuid4()))
+        assert result is not None
+        mock_delay.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -241,11 +269,13 @@ async def test_failed_export_marks_failed_status(db_session):
     # Simulate what the Celery failure handler does:
     # 1. Mark export as FAILED
     export.status = ExportStatus.FAILED
-    db_session.add(ExportLog(
-        export_id=export_id,
-        event_type="EXPORT_FAILED_RETRIES_EXHAUSTED",
-        details={"error": "simulated", "retries_exhausted": True},
-    ))
+    db_session.add(
+        ExportLog(
+            export_id=export_id,
+            event_type="EXPORT_FAILED_RETRIES_EXHAUSTED",
+            details={"error": "simulated", "retries_exhausted": True},
+        )
+    )
     await db_session.commit()
 
     # 2. Refund escrow

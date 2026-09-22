@@ -20,6 +20,12 @@ export default function CameraCapture({ onCapture, capturedCount, onAnnotations 
   const [permDenied, setPermDenied] = useState(false);
   const [facingMode, setFacingMode] = useState<"user" | "environment">("user");
   const [mirrored, setMirrored] = useState(() => loadMirrorPreference());
+  const [videoSize, setVideoSize] = useState({ width: 640, height: 480 });
+
+  const handleVideoMetadata = () => {
+    const v = videoRef.current;
+    if (v?.videoWidth) setVideoSize({ width: v.videoWidth, height: v.videoHeight });
+  };
 
   const stopCamera = useCallback(() => {
     if (streamRef.current) {
@@ -124,8 +130,8 @@ export default function CameraCapture({ onCapture, capturedCount, onAnnotations 
     });
   }, []);
 
-  const videoWidth = videoRef.current?.videoWidth || 640;
-  const videoHeight = videoRef.current?.videoHeight || 480;
+  const videoWidth = videoSize.width;
+  const videoHeight = videoSize.height;
 
   return (
     <div className="camera-capture">
@@ -159,6 +165,7 @@ export default function CameraCapture({ onCapture, capturedCount, onAnnotations 
               autoPlay
               playsInline
               muted
+              onLoadedMetadata={handleVideoMetadata}
               className={`camera-video${mirrored ? " camera-video-mirror" : ""}`}
             />
             {onAnnotations && onAnnotations.length > 0 && (

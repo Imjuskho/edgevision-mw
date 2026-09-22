@@ -40,9 +40,7 @@ async def assign_jobs(
     user: dict = Depends(require_role(["ADMIN", "QA"])),
     db: AsyncSession = Depends(get_db),
 ):
-    assignments = await auto_assign_jobs(
-        db, count=body.count, target_annotator=body.annotator_id
-    )
+    assignments = await auto_assign_jobs(db, count=body.count, target_annotator=body.annotator_id)
     return assignments
 
 
@@ -66,9 +64,8 @@ async def submit(
         label_count=len(body.labels) if body.labels else 0,
     )
     try:
-        response = await submit_labels(
-            db, job_id, annotator_id, body.labels, body.quality_score
-        )
+        labels = {"objects": [label.model_dump(exclude_none=True) for label in body.labels]}
+        response = await submit_labels(db, job_id, annotator_id, labels, body.quality_score)
         logger.info(
             "annotation_submit_done",
             trace_id=trace_id,
@@ -77,11 +74,7 @@ async def submit(
         )
     except ValueError as exc:
         detail = str(exc)
-        code = (
-            status.HTTP_403_FORBIDDEN
-            if "Not authorized" in detail
-            else status.HTTP_404_NOT_FOUND
-        )
+        code = status.HTTP_403_FORBIDDEN if "Not authorized" in detail else status.HTTP_404_NOT_FOUND
         logger.warning("annotation_submit_failed", trace_id=trace_id, job_id=str(job_id), error=detail)
         raise HTTPException(status_code=code, detail=detail)
     return response
@@ -99,9 +92,7 @@ async def review(
     db: AsyncSession = Depends(get_db),
 ):
     try:
-        response = await submit_review(
-            db, job_id, UUID(user["sub"]), body.review_labels, category=category
-        )
+        response = await submit_review(db, job_id, UUID(user["sub"]), body.review_labels, category=category)
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

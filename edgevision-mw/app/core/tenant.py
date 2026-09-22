@@ -6,9 +6,7 @@ from uuid import UUID
 from sqlalchemy import ForeignKey
 from sqlalchemy.orm import Mapped, declared_attr, mapped_column
 
-current_tenant_id: contextvars.ContextVar[UUID | None] = contextvars.ContextVar(
-    "current_tenant_id", default=None
-)
+current_tenant_id: contextvars.ContextVar[UUID | None] = contextvars.ContextVar("current_tenant_id", default=None)
 
 
 def set_current_tenant_id(tenant_id: UUID | None) -> None:

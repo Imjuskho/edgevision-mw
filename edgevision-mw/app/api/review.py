@@ -86,18 +86,20 @@ async def review_queue(
         )
         labeled_count = (await db.execute(labeled_stmt)).scalar() or 0
 
-        items.append(ReviewQueueItem(
-            assignment_id=a.id,
-            dataset_id=ds.dataset_id if ds else str(a.dataset_id),
-            dataset_name=ds.name if ds else "Unknown",
-            annotator_id=str(a.annotator_id),
-            annotator_name=annotator.email if annotator else "Unknown",
-            total_images=a.total_images,
-            completed_images=labeled_count,
-            submitted_at=a.updated_at,
-            deadline=a.deadline,
-            priority=a.priority,
-        ))
+        items.append(
+            ReviewQueueItem(
+                assignment_id=a.id,
+                dataset_id=ds.dataset_id if ds else str(a.dataset_id),
+                dataset_name=ds.name if ds else "Unknown",
+                annotator_id=str(a.annotator_id),
+                annotator_name=annotator.email if annotator else "Unknown",
+                total_images=a.total_images,
+                completed_images=labeled_count,
+                submitted_at=a.updated_at,
+                deadline=a.deadline,
+                priority=a.priority,
+            )
+        )
 
     return ReviewQueueResponse(items=items, total=len(items))
 
@@ -123,17 +125,19 @@ async def live_review_queue(
             continue
         detected = ann.detected_objects if isinstance(ann.detected_objects, dict) else {}
         objects = detected.get("objects", [])
-        items.append(LiveReviewItem(
-            annotation_id=str(ann.id),
-            image_path=ann.image_path,
-            thumbnail_url=f"/api/v1/annotations/{ann.id}/thumbnail",
-            status=ann.status.value if hasattr(ann.status, "value") else str(ann.status),
-            orientation=_live_orientation(ann),
-            depth_available=_live_depth_available(ann),
-            annotation_count=len(objects) if isinstance(objects, list) else 0,
-            created_at=ann.created_at,
-            live_capture=True,
-        ))
+        items.append(
+            LiveReviewItem(
+                annotation_id=str(ann.id),
+                image_path=ann.image_path,
+                thumbnail_url=f"/api/v1/annotations/{ann.id}/thumbnail",
+                status=ann.status.value if hasattr(ann.status, "value") else str(ann.status),
+                orientation=_live_orientation(ann),
+                depth_available=_live_depth_available(ann),
+                annotation_count=len(objects) if isinstance(objects, list) else 0,
+                created_at=ann.created_at,
+                live_capture=True,
+            )
+        )
 
     return LiveReviewQueueResponse(items=items, total=len(items))
 
@@ -220,36 +224,34 @@ async def review_job_detail(
     ds = await db.get(Dataset, assignment.dataset_id)
     annotator = await db.get(User, assignment.annotator_id)
 
-    stmt = (
-        select(Annotation)
-        .where(Annotation.dataset_id == assignment.dataset_id)
-        .order_by(Annotation.image_index)
-    )
+    stmt = select(Annotation).where(Annotation.dataset_id == assignment.dataset_id).order_by(Annotation.image_index)
     annotations = (await db.execute(stmt)).scalars().all()
 
     images = []
     for a in annotations:
         labels_data = a.human_labels or {}
         boxes = labels_data.get("boxes", []) if isinstance(labels_data, dict) else []
-        images.append({
-            "id": str(a.id),
-            "image_path": a.image_path,
-            "index": a.image_index,
-            "status": a.status.value if hasattr(a.status, "value") else str(a.status),
-            "is_certified": a.is_certified,
-            "annotations": [
-                {
-                    "label": b.get("label", ""),
-                    "confidence": b.get("confidence", 1.0),
-                    "x": b.get("x", 0),
-                    "y": b.get("y", 0),
-                    "width": b.get("width", 0),
-                    "height": b.get("height", 0),
-                }
-                for b in boxes
-            ],
-            "has_human_labels": a.human_labels is not None,
-        })
+        images.append(
+            {
+                "id": str(a.id),
+                "image_path": a.image_path,
+                "index": a.image_index,
+                "status": a.status.value if hasattr(a.status, "value") else str(a.status),
+                "is_certified": a.is_certified,
+                "annotations": [
+                    {
+                        "label": b.get("label", ""),
+                        "confidence": b.get("confidence", 1.0),
+                        "x": b.get("x", 0),
+                        "y": b.get("y", 0),
+                        "width": b.get("width", 0),
+                        "height": b.get("height", 0),
+                    }
+                    for b in boxes
+                ],
+                "has_human_labels": a.human_labels is not None,
+            }
+        )
 
     return ReviewJobDetail(
         assignment_id=assignment.id,

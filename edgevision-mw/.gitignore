@@ -56,3 +56,10 @@ pytest-report.xml
 
 # Misc workspace scratch
 datasets/
+wheelhouse/
+local_images/
+local_images_extracted/
+celerybeat-schedule.db
+
+# Dev TLS certs (Vite HTTPS over LAN)
+frontend/.cert/

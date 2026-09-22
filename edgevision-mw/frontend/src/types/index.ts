@@ -220,6 +220,7 @@ export interface Dataset {
   license_type: string;
   consent_coverage_pct: number;
   iaa_score: number;
+  pii_scrub_verified?: boolean;
   created_at: string;
   updated_at: string;
   dataset_type?: string;

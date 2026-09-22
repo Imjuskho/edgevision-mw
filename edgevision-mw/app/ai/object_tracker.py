@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import deque
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -36,6 +37,9 @@ class TrackConfig:
     iou_threshold: float = 0.3
     cross_class_penalty: float = 0.5
     reid_threshold: float = 0.75
+    confidence_window: int = 8
+    alert_on_threshold: float = 0.65
+    alert_off_threshold: float = 0.45
     max_age: dict[str, int] = field(default_factory=lambda: {"default": 15})
 
 
@@ -117,10 +121,11 @@ class Track:
         *,
         mask: list | None = None,
         mask_format: str | None = None,
+        config: TrackConfig | None = None,
     ):
         self.track_id = track_id
         self.class_name = class_name
-        self.confidence = confidence
+        self._config = config or TrackConfig()
         self.state = TrackState.TENTATIVE
         self.hits = 1
         self.no_loss_coast = 0
@@ -130,6 +135,12 @@ class Track:
         self.mask = mask
         self.mask_format = mask_format
         self._embedding: list[float] | None = None
+        window = max(1, self._config.confidence_window)
+        self._confidence_history: deque[float] = deque(maxlen=window)
+        self.confidence = confidence
+        self.smoothed_confidence = confidence
+        self.alert_active = False
+        self._apply_confidence_smoothing(confidence)
 
     def predict(self) -> None:
         self.age += 1
@@ -146,7 +157,7 @@ class Track:
     ) -> None:
         self.kf.update(bbox)
         self.bbox = bbox.copy()
-        self.confidence = confidence
+        self._apply_confidence_smoothing(confidence)
         self.hits += 1
         self.no_loss_coast = 0
         if embedding is not None:
@@ -165,6 +176,16 @@ class Track:
     @property
     def embedding(self) -> list[float] | None:
         return self._embedding
+
+    def _apply_confidence_smoothing(self, confidence: float) -> None:
+        self.confidence = confidence
+        self._confidence_history.append(confidence)
+        self.smoothed_confidence = sum(self._confidence_history) / len(self._confidence_history)
+        if self.alert_active:
+            if self.smoothed_confidence < self._config.alert_off_threshold:
+                self.alert_active = False
+        elif self.smoothed_confidence >= self._config.alert_on_threshold:
+            self.alert_active = True
 
 
 def _hungarian(cost: np.ndarray) -> list[tuple[int, int]]:
@@ -246,10 +267,7 @@ class ByteTrack:
             t.predict()
 
         high_dets = [d for d in detections if d.get("confidence", 0) >= self._track_high_thresh]
-        low_dets = [
-            d for d in detections
-            if self._track_low_thresh <= d.get("confidence", 0) < self._track_high_thresh
-        ]
+        low_dets = [d for d in detections if self._track_low_thresh <= d.get("confidence", 0) < self._track_high_thresh]
 
         confirmed = [t for t in self._tracks if t.state in (TrackState.CONFIRMED, TrackState.TENTATIVE)]
 
@@ -297,6 +315,7 @@ class ByteTrack:
                 confidence=det.get("confidence", 0.5),
                 mask=det.get("mask"),
                 mask_format=det.get("mask_format"),
+                config=self._config,
             )
             emb = self._det_embedding(det, image)
             if emb is not None:
@@ -314,6 +333,8 @@ class ByteTrack:
                     "bbox": t.bbox.tolist(),
                     "class_name": t.class_name,
                     "confidence": t.confidence,
+                    "smoothed_confidence": t.smoothed_confidence,
+                    "alert_active": t.alert_active,
                     "hits": t.hits,
                     "age": t.age,
                 }

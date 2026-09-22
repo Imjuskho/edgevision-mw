@@ -15,13 +15,13 @@ from app.models.mixins import StorageKeyMixin
 class TrainingJob(StorageKeyMixin, TimestampMixin, Base):
     __tablename__ = "training_jobs"
 
-    user_id: Mapped[UUID] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
-    )
+    user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     dataset_id: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
     model_name: Mapped[str] = mapped_column(String(150), nullable=False)
     model_type: Mapped[ModelType] = mapped_column(Enum(ModelType, native_enum=False), nullable=False)
-    status: Mapped[TrainingStatus] = mapped_column(Enum(TrainingStatus, native_enum=False), nullable=False, default=TrainingStatus.PENDING)
+    status: Mapped[TrainingStatus] = mapped_column(
+        Enum(TrainingStatus, native_enum=False), nullable=False, default=TrainingStatus.PENDING
+    )
     progress_pct: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     accuracy: Mapped[float | None] = mapped_column(Float, nullable=True)
     epochs: Mapped[int] = mapped_column(Integer, nullable=False, default=0)

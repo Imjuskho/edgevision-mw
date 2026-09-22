@@ -37,11 +37,24 @@ export function GlobalSearchDialog({
   const { t } = useTranslation();
   const [activeIndex, setActiveIndex] = useState(0);
 
+  const [prevOpen, setPrevOpen] = useState(open);
+  if (open !== prevOpen) {
+    setPrevOpen(open);
+    if (!open) setActiveIndex(0);
+  }
+
   const filteredCommands = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return commands;
     return commands.filter((c) => c.label.toLowerCase().includes(q));
   }, [commands, query]);
+
+  const listKey = `${query}|${results.length}|${filteredCommands.length}`;
+  const [prevListKey, setPrevListKey] = useState(listKey);
+  if (listKey !== prevListKey) {
+    setPrevListKey(listKey);
+    setActiveIndex(0);
+  }
 
   const flatItems = useMemo(
     () => [
@@ -54,13 +67,8 @@ export function GlobalSearchDialog({
   useEffect(() => {
     if (!open) {
       onQueryChange("");
-      setActiveIndex(0);
     }
   }, [open, onQueryChange]);
-
-  useEffect(() => {
-    setActiveIndex(0);
-  }, [query, results.length, filteredCommands.length]);
 
   useEffect(() => {
     if (!open) return;
@@ -91,7 +99,6 @@ export function GlobalSearchDialog({
 
   if (!open) return null;
 
-  let flatIndex = -1;
   const hasQuery = query.trim().length > 0;
 
   return (
@@ -121,9 +128,8 @@ export function GlobalSearchDialog({
           {hasQuery && results.length > 0 && (
             <>
               <div className="ui-command-group-label">{t("app.searchResults", "Results")}</div>
-              {results.map((result) => {
-                flatIndex += 1;
-                const idx = flatIndex;
+              {results.map((result, i) => {
+                const idx = i;
                 return (
                   <button
                     key={`${result.kind}-${result.id}`}
@@ -162,9 +168,8 @@ export function GlobalSearchDialog({
           <div className="ui-command-group-label">
             {hasQuery ? t("app.searchActions", "Actions") : t("app.searchQuick", "Quick actions")}
           </div>
-          {filteredCommands.map((cmd) => {
-            flatIndex += 1;
-            const idx = flatIndex;
+          {filteredCommands.map((cmd, j) => {
+            const idx = results.length + j;
             return (
               <button
                 key={cmd.id}

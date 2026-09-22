@@ -1,4 +1,5 @@
 """Tests for Phase 8.3 — CLIP embedding service."""
+
 from __future__ import annotations
 
 import io

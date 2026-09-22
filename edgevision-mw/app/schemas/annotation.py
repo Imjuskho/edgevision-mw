@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class JobAssignRequest(BaseModel):
@@ -22,10 +22,30 @@ class JobAssignment(BaseModel):
     deadline: datetime | None = Field(default=None, description="Assignment deadline")
 
 
+class AnnotationLabel(BaseModel):
+    model_config = ConfigDict(from_attributes=True, extra="allow")
+
+    class_name: str | None = Field(default=None, description="Detected class label")
+    confidence: float | None = Field(default=None, ge=0.0, le=1.0, description="Detection confidence 0-1")
+    bbox: list[float] | None = Field(
+        default=None,
+        min_length=4,
+        max_length=4,
+        description="Bounding box as [x1, y1, x2, y2] or [x, y, w, h]",
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def _rename_class_key(cls, data):
+        if isinstance(data, dict) and "class" in data and "class_name" not in data:
+            data = {**data, "class_name": data["class"]}
+        return data
+
+
 class LabelSubmission(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    labels: list[dict] = Field(..., min_length=1, description="Non-empty list of label dicts")
+    labels: list[AnnotationLabel] = Field(..., min_length=1, description="Non-empty list of label objects")
     quality_score: float = Field(default=1.0, ge=0.0, le=1.0, description="Self-reported quality score")
 
 
@@ -44,6 +64,7 @@ class AnnotationResponse(BaseModel):
     quality_score: float = Field(..., description="Quality score")
     annotator_id: UUID | None = Field(default=None, description="Assigned annotator")
     qa_reviewer_id: UUID | None = Field(default=None, description="QA reviewer")
+    model_version: str | None = Field(default=None, description="Model version that produced auto-labels")
 
 
 class AnnotatorLeaderboard(BaseModel):

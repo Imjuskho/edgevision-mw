@@ -33,19 +33,11 @@ class AnnotationSession(TimestampMixin, Base):
         index=True,
         nullable=False,
     )
-    started_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False
-    )
-    ended_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     image_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    annotations_created: Mapped[int] = mapped_column(
-        Integer, nullable=False, default=0
-    )
-    is_active: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=True
-    )
+    annotations_created: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
 
 class AnnotationAction(TimestampMixin, Base):
@@ -69,9 +61,7 @@ class AnnotationAction(TimestampMixin, Base):
 
 class ImageEmbedding(StorageKeyMixin, TimestampMixin, Base):
     __tablename__ = "image_embeddings"
-    __table_args__ = (
-        Index("ix_image_embeddings_path_model", "image_path", "model_name"),
-    )
+    __table_args__ = (Index("ix_image_embeddings_path_model", "image_path", "model_name"),)
 
     image_path: Mapped[str] = mapped_column(String(500), nullable=False, index=True)
     annotation_id: Mapped[UUID | None] = mapped_column(
@@ -80,12 +70,8 @@ class ImageEmbedding(StorageKeyMixin, TimestampMixin, Base):
         index=True,
     )
     model_name: Mapped[str] = mapped_column(String(100), nullable=False)
-    embedding: Mapped[list | None] = mapped_column(
-        Vector(512), nullable=True
-    )
-    metadata_json: Mapped[dict | None] = mapped_column(
-        JSONB, nullable=True
-    )
+    embedding: Mapped[list | None] = mapped_column(Vector(512), nullable=True)
+    metadata_json: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
 
 class DuplicateGroup(TimestampMixin, Base):
@@ -104,9 +90,7 @@ class DuplicateGroup(TimestampMixin, Base):
     similarity_score: Mapped[float] = mapped_column(Float, nullable=False)
     strategy: Mapped[str] = mapped_column(String(50), nullable=False)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="open")
-    resolution_action: Mapped[str | None] = mapped_column(
-        String(50), nullable=True
-    )
+    resolution_action: Mapped[str | None] = mapped_column(String(50), nullable=True)
 
 
 class DuplicateGroupMember(TimestampMixin, Base):
@@ -128,9 +112,7 @@ class DuplicateGroupMember(TimestampMixin, Base):
 
 class DatasetHealthSnapshot(TimestampMixin, Base):
     __tablename__ = "dataset_health_snapshots"
-    __table_args__ = (
-        Index("ix_dataset_health_snapshots_time", "created_at"),
-    )
+    __table_args__ = (Index("ix_dataset_health_snapshots_time", "created_at"),)
 
     dataset_id: Mapped[UUID] = mapped_column(
         ForeignKey("datasets.id", ondelete="CASCADE"),
@@ -162,30 +144,18 @@ class ExportJob(StorageKeyMixin, TimestampMixin, Base):
         index=True,
         nullable=False,
     )
-    status: Mapped[str] = mapped_column(
-        String(20), nullable=False, default="PENDING"
-    )
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="PENDING")
     format: Mapped[str] = mapped_column(String(20), nullable=False)
     split_config: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     augmentation_config: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
-    include_images: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=True
-    )
-    include_annotations: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=True
-    )
-    include_metadata: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=True
-    )
+    include_images: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    include_annotations: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    include_metadata: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     image_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
     output_path: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     checksum: Mapped[str | None] = mapped_column(String(128), nullable=True)
-    started_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-    completed_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     file_size_bytes: Mapped[int | None] = mapped_column(Integer, nullable=True)
     download_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     progress_pct: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
@@ -203,12 +173,6 @@ class ConsentZone(TimestampMixin, Base):
         nullable=True,
         index=True,
     )
-    status: Mapped[ConsentStatus] = mapped_column(
-        String(20), nullable=False, default=ConsentStatus.ACTIVE
-    )
-    valid_from: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-    valid_until: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    status: Mapped[ConsentStatus] = mapped_column(String(20), nullable=False, default=ConsentStatus.ACTIVE)
+    valid_from: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    valid_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

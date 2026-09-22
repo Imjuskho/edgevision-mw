@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { cn } from "./cn";
 import { Kbd } from "./Kbd";
 
@@ -17,9 +18,19 @@ export interface CommandPaletteProps {
   placeholder?: string;
 }
 
-export function CommandPalette({ open, onClose, items, placeholder = "Search commands…" }: CommandPaletteProps) {
+export function CommandPalette({ open, onClose, items, placeholder }: CommandPaletteProps) {
+  const { t } = useTranslation();
+  const resolvedPlaceholder = placeholder ?? t("common.searchCommands");
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
+  const [prevOpen, setPrevOpen] = useState(open);
+  if (open !== prevOpen) {
+    setPrevOpen(open);
+    if (!open) {
+      setQuery("");
+      setActiveIndex(0);
+    }
+  }
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -36,13 +47,6 @@ export function CommandPalette({ open, onClose, items, placeholder = "Search com
     }
     return map;
   }, [filtered]);
-
-  useEffect(() => {
-    if (!open) {
-      setQuery("");
-      setActiveIndex(0);
-    }
-  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -80,9 +84,9 @@ export function CommandPalette({ open, onClose, items, placeholder = "Search com
             setQuery(e.target.value);
             setActiveIndex(0);
           }}
-          placeholder={placeholder}
+          placeholder={resolvedPlaceholder}
           autoFocus
-          aria-label={placeholder}
+          aria-label={resolvedPlaceholder}
         />
         <div className="ui-command-list" role="listbox">
           {filtered.length === 0 && (

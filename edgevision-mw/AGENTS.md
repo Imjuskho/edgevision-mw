@@ -79,7 +79,7 @@ edgevision-mw/
 │   │   └── dataset.py           # (empty or minimal — dataset schemas in catalog.py)
 │   └── workers/
 │       ├── celery_app.py        # Celery application config
-│       └── tasks.py             # 8 async tasks: batch, dataset, audit, auto-label, export, payroll
+│       └── tasks.py             # 22 async tasks: batch, dataset, audit, auto-label, export, training, dedup, consent, perception, and more
 ├── tests/
 │   ├── conftest.py              # Fixtures: db_session, test_client, jwt_token_factory, mock_minio
 │   ├── test_fleet.py
@@ -104,7 +104,15 @@ edgevision-mw/
 │       ├── 0006_drop_consent_ledger_updated_at.py
 │       └── 0007_add_quotes_table.py
 ├── scripts/
-│   └── backup.sh                # PostgreSQL + Redis + MinIO backup script
+│   ├── backup.sh                # PostgreSQL + Redis + MinIO backup script
+│   └── activation/              # Production activation scripts
+│       ├── register_node.py     # P1.1: Register a real node + first heartbeat
+│       ├── process_batch.py     # P1.2: Create batch + dispatch auto_label via Celery
+│       ├── validate_yolo.py     # P2.1: Validate YOLO on real frames with precision/recall/F1
+│       ├── generate_report.py   # P4.1: Generate municipal weekly report (JSON + CSV)
+│       ├── daily_check.py       # Daily discipline: 3 numbers + fleet health + alerts
+│       ├── collect_field_data.py # Phone+Car workflow: GPS extraction, video frames, dedup, batch
+│       └── FIELD_GUIDE.md       # Step-by-step field collection guide for operators
 ├── docs/
 │   ├── annotator-onboarding-guide.md
 │   ├── production-deployment-guide.md
@@ -325,8 +333,24 @@ All tasks use `_run_async()` helper (`asyncio.run()`) to bridge sync Celery → 
 | `workers.build_dataset` | `build_dataset_task` | Build dataset: stratified sampling, class balancing, PII check, pricing |
 | `workers.run_compliance_audit` | `run_compliance_audit_task` | Daily consent audit (count active/withdrawn/expired) |
 | `workers.auto_label` | `auto_label_task` | YOLO prelabel + YOLOv8-seg masks (SAM when decoder probe passes); batch → INGESTED + Annotation rows |
+| `workers.auto_label_annotations` | `auto_label_annotations_task` | Auto-label existing annotations with vision models |
 | `workers.export_dataset` | `export_dataset_task` | Secure export: PENDING → PROCESSING → COMPLETED with ExportLog |
 | `workers.pay_annotators` | `pay_annotators_task` | Weekly payment: count certified annotations per annotator |
+| `workers.run_training` | `run_training_task` | Model training job orchestration |
+| `workers.check_heartbeat_timeouts` | `check_heartbeat_timeouts_task` | Detect and alert on nodes missing heartbeats |
+| `workers.reconcile_stuck_batches` | `reconcile_stuck_batches_task` | Recover batches stuck in non-terminal states |
+| `workers.dedup_analyze` | `dedup_analyze_task` | Cross-dataset deduplication analysis |
+| `workers.export_build` | `export_build_task` | Build export archive with watermarking |
+| `workers.auto_label_road` | `auto_label_road_task` | Road-specific auto-labeling pipeline |
+| `workers.auto_label_agri` | `auto_label_agri_task` | Agriculture-specific auto-labeling pipeline |
+| `workers.expire_consents` | `expire_consents_task` | Expire consents past their expiry date |
+| `workers.hard_delete_user_data` | `hard_delete_user_data_task` | GDPR-compliant hard delete of user data |
+| `workers.process_operator_stipends` | `process_operator_stipends_task` | Calculate and disburse operator stipends |
+| `workers.daily_consent_sms_digest` | `daily_consent_sms_digest_task` | Daily consent status SMS summary |
+| `workers.process_airtime_rewards` | `process_airtime_rewards_task` | Disburse mobile airtime rewards to annotators |
+| `workers.predict_trajectories` | `predict_trajectories_task` | Vehicle trajectory prediction from camera feeds |
+| `workers.detect_anomalies` | `detect_anomalies_task` | Real-time anomaly detection on camera frames |
+| `workers.update_scene_reconstruction` | `update_scene_reconstruction_task` | 3D scene reconstruction from multi-view imagery |
 
 All tasks have: `autoretry_for=(Exception,)`, `max_retries=3`, `retry_backoff=True`, `retry_jitter=True`. Audit logs written on success and failure.
 
@@ -393,7 +417,7 @@ All tasks have: `autoretry_for=(Exception,)`, `max_retries=3`, `retry_backoff=Tr
 - 30-day retention with automatic cleanup
 
 ### Alembic Migrations
-19 numbered migrations (0001–0019) plus the health-snapshot revision, covering:
+29 numbered migrations (0001–0028) plus the health-snapshot revision, covering:
 1. Initial schema (all core tables)
 2. Append-only enforcement (triggers on consent_ledger, audit_logs)
 3. Webhook URL column on users
@@ -440,7 +464,59 @@ Run: `cd edgevision-mw && alembic upgrade head`
 - `test_auth.py` — Registration, login, API keys, /me
 - `test_rate_limit.py` — Rate limiting behavior
 - `test_buyer_notification.py` — Webhook notification with retry
+- `test_health.py` — Health check endpoint
+- `test_metrics.py` — Prometheus metrics endpoint
+- `test_analytics.py` — Analytics queries
+- `test_studio.py` — Annotation studio sessions
+- `test_studio_ai.py` — AI-assisted annotation
+- `test_studio_review.py` — Studio review workflow
+- `test_studio_sync.py` — Studio sync operations
+- `test_studio_datasets.py` — Studio dataset management
+- `test_studio_intelligence.py` — Dataset health, class distribution, dedup analysis
+- `test_annotations_live.py` — Live annotation endpoints
+- `test_live_annotation.py` — Live annotation service
+- `test_live_annotation_ws.py` — WebSocket annotation
+- `test_review_live.py` — Live review workflow
+- `test_prelabel.py` — Pre-labeling pipeline
+- `test_agri.py` — Agriculture analysis endpoints
+- `test_road_scene_api.py` — Road scene analysis
+- `test_road_semantic.py` — Road semantic segmentation
+- `test_road_segmenter.py` — Road segmentation model
+- `test_object_tracker.py` — Object tracking
+- `test_locate_anything.py` — Locate-anything query
+- `test_phase7.py` — Phase 7 features
+- `test_phase1_gap_coverage.py` — Phase 1 gap coverage tests
+- `test_batch_inference.py` — Batch inference pipeline
+- `test_image_upload.py` — Image upload endpoints
+- `test_video_upload.py` — Video upload endpoints
+- `test_video_processing.py` — Video processing pipeline
+- `test_upload_pipeline.py` — End-to-end upload pipeline
+- `test_export_builder.py` — Export build process
+- `test_dataset_pipeline.py` — Dataset build pipeline
+- `test_operator_api.py` — Operator endpoints
+- `test_buyer_dashboard.py` — Buyer dashboard endpoints
+- `test_subject_portal.py` — Subject portal endpoints
+- `test_alerts_api.py` — Alerts API endpoints
+- `test_perception_events_api.py` — Perception events API
+- `test_events.py` — Event system
+- `test_openapi.py` — OpenAPI schema validation
+- `test_security_headers.py` — Security header checks
+- `test_pagination.py` — Pagination behavior
+- `test_dedup.py` — Deduplication analysis
+- `test_pii_redaction.py` — PII redaction
+- `test_ws_metrics.py` — WebSocket metrics
+- `test_live_inference_masks.py` — Live inference mask generation
+- `test_live_label_bridge.py` — Live label bridge
+- `test_sam_segmenter.py` — SAM segmentation
+- `test_yolo_seg.py` — YOLO segmentation
+- `test_clip_embed.py` — CLIP embedding
+- `test_mask_utils.py` — Mask utility functions
+- `test_depth_estimator.py` — Depth estimation
+- `test_metric_depth.py` — Metric depth
+- `test_mono_3d.py` — Monocular 3D detection
+- `test_api_key_hashing.py` — API key hashing
 - `schemas/test_geometry.py` — GeoPoint validation, bbox validation
+- `schemas/test_annotation_schema.py` — Annotation schema validation
 
 ---
 
@@ -488,9 +564,9 @@ Run: `cd edgevision-mw && alembic upgrade head`
 
 ### High Priority
 2. **Missing database indexes** — Some composite indexes still missing on high-traffic tables
-3. **`/exports` list endpoint returns empty stub** — Not fully implemented for buyers
-4. **`/exports/{export_id}` returns hardcoded placeholder** — Not connected to actual data in all paths
-5. **Invoice/receipt generation missing** — Export creates payment but no invoice record
+3. **`/exports` list endpoint** — RESOLVED: fully implemented for buyers
+4. **`/exports/{export_id}` endpoint** — RESOLVED: connected to actual export data
+5. **Invoice/receipt generation** — PARTIALLY RESOLVED: export lifecycle is complete but formal invoice PDF not yet generated
 6. **Buyer/marketplace UI missing** — Consent, catalog, quotes, billing, and exports have backends but limited frontend screens
 
 ### Medium Priority
@@ -584,6 +660,13 @@ open http://localhost:8000/docs
 
 # Check health
 curl http://localhost:8000/health
+
+# Production activation (run in order)
+POSTGRES_HOST=localhost python scripts/activation/register_node.py      # P1.1
+POSTGRES_HOST=localhost python scripts/activation/daily_check.py        # Daily discipline
+POSTGRES_HOST=localhost python scripts/activation/process_batch.py --frames /path/to/frames --node LIL-TRUST-001  # P1.2
+POSTGRES_HOST=localhost python scripts/activation/validate_yolo.py --frames /path/to/frames --model yolov8x.pt    # P2.1
+POSTGRES_HOST=localhost python scripts/activation/generate_report.py --node LIL-TRUST-001 --days 7                 # P4.1
 ```
 
 ---

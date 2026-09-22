@@ -23,10 +23,12 @@ async def test_save_live_annotation(_patch_minio, test_client, db_session):
     token = _create_token(admin)
 
     buf = _make_png_buffer(seed=42)
-    ann_json = json.dumps([
-        {"class_name": "car", "confidence": 0.95, "bbox": [100, 50, 200, 150]},
-        {"class_name": "person", "confidence": 0.87, "bbox": [300, 100, 80, 180]},
-    ])
+    ann_json = json.dumps(
+        [
+            {"class_name": "car", "confidence": 0.95, "bbox": [100, 50, 200, 150]},
+            {"class_name": "person", "confidence": 0.87, "bbox": [300, 100, 80, 180]},
+        ]
+    )
 
     resp = await test_client.post(
         "/api/v1/annotations/live",
@@ -46,9 +48,7 @@ async def test_save_live_annotation(_patch_minio, test_client, db_session):
     assert data["width"] > 0
     assert data["height"] > 0
 
-    result = await db_session.execute(
-        select(Annotation).where(Annotation.id == data["id"])
-    )
+    result = await db_session.execute(select(Annotation).where(Annotation.id == data["id"]))
     record = result.scalar_one_or_none()
     assert record is not None
     assert record.status == AnnotationStatus.PENDING
@@ -63,9 +63,11 @@ async def test_save_live_annotation_with_orientation(_patch_minio, test_client, 
     token = _create_token(admin)
 
     buf = _make_png_buffer(seed=44)
-    ann_json = json.dumps([
-        {"class_name": "car", "confidence": 0.95, "bbox": [100, 50, 200, 150]},
-    ])
+    ann_json = json.dumps(
+        [
+            {"class_name": "car", "confidence": 0.95, "bbox": [100, 50, 200, 150]},
+        ]
+    )
 
     resp = await test_client.post(
         "/api/v1/annotations/live",
@@ -92,14 +94,16 @@ async def test_save_live_annotation_with_mask_rle(_patch_minio, test_client, db_
 
     buf = _make_png_buffer(seed=45)
     mask_polygon = [[0.1, 0.1], [0.4, 0.1], [0.4, 0.4], [0.1, 0.4]]
-    ann_json = json.dumps([
-        {"class_name": "car", "confidence": 0.95, "bbox": [10, 10, 50, 50]},
-    ])
+    ann_json = json.dumps(
+        [
+            {"class_name": "car", "confidence": 0.95, "bbox": [10, 10, 50, 50]},
+        ]
+    )
     masks_json = json.dumps([mask_polygon])
 
     monkeypatch.setattr("app.ai.mask_utils.pycocotools_available", lambda: True)
     monkeypatch.setattr(
-        "app.api.annotations_live.mask_to_rle",
+        "app.services.live_capture.mask_to_rle",
         lambda mask: "mock_rle" if mask.any() else (_ for _ in ()).throw(ValueError("empty")),
     )
 
@@ -117,9 +121,7 @@ async def test_save_live_annotation_with_mask_rle(_patch_minio, test_client, db_
     assert resp.status_code == 201, resp.text
     data = resp.json()
 
-    result = await db_session.execute(
-        select(Annotation).where(Annotation.id == data["id"])
-    )
+    result = await db_session.execute(select(Annotation).where(Annotation.id == data["id"]))
     record = result.scalar_one()
     objects = record.detected_objects.get("objects", [])
     assert len(objects) == 1

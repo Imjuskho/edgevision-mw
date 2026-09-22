@@ -27,21 +27,33 @@ export function useGlobalSearch({ datasets, activeDatasetId, debounceMs = 250 }:
   const [images, setImages] = useState<ImageItem[]>([]);
   const [loading, setLoading] = useState(false);
 
+  const [prevDebouncedQuery, setPrevDebouncedQuery] = useState(debouncedQuery);
+  if (debouncedQuery !== prevDebouncedQuery) {
+    setPrevDebouncedQuery(debouncedQuery);
+    if (!debouncedQuery) {
+      setRemoteDatasets([]);
+      setNodes([]);
+      setImages([]);
+      setLoading(false);
+    } else {
+      setLoading(true);
+    }
+  }
+  const [prevActiveDatasetId, setPrevActiveDatasetId] = useState(activeDatasetId);
+  if (activeDatasetId !== prevActiveDatasetId) {
+    setPrevActiveDatasetId(activeDatasetId);
+    if (!activeDatasetId) setImages([]);
+  }
+
   useEffect(() => {
     const timer = window.setTimeout(() => setDebouncedQuery(query.trim()), debounceMs);
     return () => window.clearTimeout(timer);
   }, [query, debounceMs]);
 
   useEffect(() => {
-    if (!debouncedQuery) {
-      setRemoteDatasets([]);
-      setNodes([]);
-      setImages([]);
-      return;
-    }
+    if (!debouncedQuery) return;
 
     let cancelled = false;
-    setLoading(true);
 
     (async () => {
       try {
@@ -107,8 +119,6 @@ export function useGlobalSearch({ datasets, activeDatasetId, debounceMs = 250 }:
                 if (!cancelled) setImages([]);
               }),
           );
-        } else {
-          setImages([]);
         }
 
         await Promise.all(requests);

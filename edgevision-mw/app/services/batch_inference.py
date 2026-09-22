@@ -1,4 +1,5 @@
 """Helpers for dataset-level batch inference (prelabel / road segmentation)."""
+
 from __future__ import annotations
 
 from uuid import UUID
@@ -23,18 +24,14 @@ def _has_detection_labels(ann: Annotation) -> bool:
     return isinstance(labels, list) and len(labels) > 0
 
 
-async def _road_annotation_map(
-    db: AsyncSession, annotation_ids: list[UUID]
-) -> dict[UUID, RoadAnnotation]:
+async def _road_annotation_map(db: AsyncSession, annotation_ids: list[UUID]) -> dict[UUID, RoadAnnotation]:
     if not annotation_ids:
         return {}
     rows = (
-        await db.execute(
-            select(RoadAnnotation).where(
-                RoadAnnotation.annotation_id.in_(annotation_ids)
-            )
-        )
-    ).scalars().all()
+        (await db.execute(select(RoadAnnotation).where(RoadAnnotation.annotation_id.in_(annotation_ids))))
+        .scalars()
+        .all()
+    )
     return {ra.annotation_id: ra for ra in rows}
 
 
@@ -52,11 +49,7 @@ async def resolve_batch_annotation_ids(
     if ds is None:
         raise ValueError(f"Dataset not found: {dataset_id}")
 
-    stmt = (
-        select(Annotation)
-        .where(Annotation.dataset_id == ds.id)
-        .order_by(Annotation.image_index)
-    )
+    stmt = select(Annotation).where(Annotation.dataset_id == ds.id).order_by(Annotation.image_index)
     if image_ids:
         stmt = stmt.where(Annotation.id.in_(image_ids))
 

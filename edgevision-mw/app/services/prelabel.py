@@ -4,6 +4,7 @@ Runs YOLOv8-cls on image patches via a sliding window grid to produce
 bounding-box pseudo-detections. These serve as warm-start pre-labels
 for human annotators.
 """
+
 from __future__ import annotations
 
 import logging
@@ -17,8 +18,16 @@ logger = logging.getLogger(__name__)
 
 # Class names matching the browser-side YOLO classifier
 CLASS_NAMES = [
-    "car", "matola", "pedestrian", "bicycle", "motorcycle",
-    "goat", "cow", "dog", "bus", "minibus",
+    "car",
+    "matola",
+    "pedestrian",
+    "bicycle",
+    "motorcycle",
+    "goat",
+    "cow",
+    "dog",
+    "bus",
+    "minibus",
 ]
 
 # Mapping from YOLO class names to our taxonomy labels
@@ -52,10 +61,7 @@ def _find_model() -> Path | None:
     candidates = []
     if settings.PRELABEL_YOLO_CLS_PATH:
         candidates.append(Path(settings.PRELABEL_YOLO_CLS_PATH))
-    candidates.append(
-        Path(__file__).resolve().parents[2]
-        / "frontend/public/models/yolov8n_cls_int8.onnx"
-    )
+    candidates.append(Path(__file__).resolve().parents[2] / "frontend/public/models/yolov8n_cls_int8.onnx")
     for p in candidates:
         if p.exists():
             return p
@@ -91,10 +97,7 @@ def _nms(boxes: list[list[float]], scores: list[float], iou_thresh: float = 0.3)
     while order:
         i = order.pop(0)
         keep.append(i)
-        order = [
-            j for j in order
-            if _iou(boxes[i], boxes[j]) <= iou_thresh
-        ]
+        order = [j for j in order if _iou(boxes[i], boxes[j]) <= iou_thresh]
     return keep
 
 
@@ -224,17 +227,21 @@ def _prelabel_sliding_window(
     results = []
     for i in keep:
         x1, y1, x2, y2 = raw_boxes[i]
-        results.append({
-            "label": raw_labels[i],
-            "class_name": CLASS_NAMES[CLASS_NAMES.index(raw_labels[i].split("_")[0])] if raw_labels[i].split("_")[0] in CLASS_NAMES else raw_labels[i],
-            "confidence": round(raw_scores[i], 4),
-            "bbox": [
-                round(x1, 4),
-                round(y1, 4),
-                round(x2 - x1, 4),
-                round(y2 - y1, 4),
-            ],
-        })
+        results.append(
+            {
+                "label": raw_labels[i],
+                "class_name": CLASS_NAMES[CLASS_NAMES.index(raw_labels[i].split("_")[0])]
+                if raw_labels[i].split("_")[0] in CLASS_NAMES
+                else raw_labels[i],
+                "confidence": round(raw_scores[i], 4),
+                "bbox": [
+                    round(x1, 4),
+                    round(y1, 4),
+                    round(x2 - x1, 4),
+                    round(y2 - y1, 4),
+                ],
+            }
+        )
 
     return results
 
@@ -244,7 +251,4 @@ async def prelabel_batch(
     confidence_threshold: float = 0.45,
 ) -> list[list[dict[str, Any]]]:
     """Pre-label a batch of images. Returns list of detection lists."""
-    return [
-        prelabel_image(img_bytes, confidence_threshold=confidence_threshold)
-        for img_bytes in image_bytes_list
-    ]
+    return [prelabel_image(img_bytes, confidence_threshold=confidence_threshold) for img_bytes in image_bytes_list]

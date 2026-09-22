@@ -33,32 +33,21 @@ def haversine(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     phi1, phi2 = math.radians(lat1), math.radians(lat2)
     dphi = math.radians(lat2 - lat1)
     dlambda = math.radians(lon2 - lon1)
-    a = (
-        math.sin(dphi / 2) ** 2
-        + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2) ** 2
-    )
+    a = math.sin(dphi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2) ** 2
     return 2 * R * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
 
 async def _resolve_dataset_pk(db: AsyncSession, dataset_id: str) -> uuid.UUID:
-    result = await db.execute(
-        select(Dataset.id).where(Dataset.dataset_id == dataset_id)
-    )
+    result = await db.execute(select(Dataset.id).where(Dataset.dataset_id == dataset_id))
     pk = result.scalar_one_or_none()
     if pk is None:
         raise ValueError(f"Dataset '{dataset_id}' not found")
     return pk
 
 
-async def _annotation_info(
-    db: AsyncSession, ann: Annotation
-) -> dict:
+async def _annotation_info(db: AsyncSession, ann: Annotation) -> dict:
     """Build the per-image dict required by DuplicateCluster.images."""
-    batch = (
-        await db.execute(
-            select(IngestionBatch).where(IngestionBatch.id == ann.batch_id)
-        )
-    ).scalar_one_or_none()
+    batch = (await db.execute(select(IngestionBatch).where(IngestionBatch.id == ann.batch_id))).scalar_one_or_none()
     node_id = str(batch.node_id) if batch else "unknown"
     capture_time = batch.created_at.isoformat() if batch else None
     return {
@@ -73,6 +62,7 @@ async def _annotation_info(
 # ---------------------------------------------------------------------------
 # Pass helpers
 # ---------------------------------------------------------------------------
+
 
 def _image_phash(data: bytes) -> int | None:
     """Perceptual hash (64-bit, DCT-based) of an image's bytes."""
@@ -110,18 +100,12 @@ def _hamming(a: int, b: int) -> int:
     return (a ^ b).bit_count()
 
 
-async def _load_phash_map(
-    db: AsyncSession, dataset_pk: uuid.UUID
-) -> dict[uuid.UUID, tuple[str, int, int]]:
+async def _load_phash_map(db: AsyncSession, dataset_pk: uuid.UUID) -> dict[uuid.UUID, tuple[str, int, int]]:
     """Fetch images and compute original + mirror pHash variants."""
     from app.core.config import settings
     from app.core.minio_helper import get_object_bytes
 
-    result = await db.execute(
-        select(Annotation.id, Annotation.image_path).where(
-            Annotation.dataset_id == dataset_pk
-        )
-    )
+    result = await db.execute(select(Annotation.id, Annotation.image_path).where(Annotation.dataset_id == dataset_pk))
     rows = result.all()
 
     phash_map: dict[uuid.UUID, tuple[str, int, int]] = {}
@@ -200,9 +184,7 @@ async def _phash_clusters(
         if len(members) < 2:
             continue
 
-        ann_result = await db.execute(
-            select(Annotation).where(Annotation.id.in_(members))
-        )
+        ann_result = await db.execute(select(Annotation).where(Annotation.id.in_(members)))
         annotations_by_id = {a.id: a for a in ann_result.scalars().all()}
 
         images: list[dict] = []
@@ -301,9 +283,7 @@ async def _pass_clip_semantic(
 
         ann_ids = [annotation_ids[m] for m in members]
 
-        ann_result = await db.execute(
-            select(Annotation).where(Annotation.id.in_(ann_ids))
-        )
+        ann_result = await db.execute(select(Annotation).where(Annotation.id.in_(ann_ids)))
         annotations_by_id = {a.id: a for a in ann_result.scalars().all()}
 
         images: list[dict] = []
@@ -354,9 +334,7 @@ async def _pass_gps_temporal(
     batch_ids = {r[2] for r in rows if r[2] is not None}
     batch_map: dict[uuid.UUID, IngestionBatch] = {}
     if batch_ids:
-        batch_result = await db.execute(
-            select(IngestionBatch).where(IngestionBatch.id.in_(batch_ids))
-        )
+        batch_result = await db.execute(select(IngestionBatch).where(IngestionBatch.id.in_(batch_ids)))
         for b in batch_result.scalars().all():
             batch_map[b.id] = b
 

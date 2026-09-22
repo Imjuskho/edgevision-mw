@@ -1,4 +1,5 @@
 """One-shot repair: strip leading '/' from annotation image_path and thumbnail_path."""
+
 from __future__ import annotations
 
 import asyncio
@@ -13,10 +14,7 @@ async def repair():
     count = 0
     async with async_session() as db:
         result = await db.execute(
-            select(Annotation).where(
-                Annotation.image_path.startswith("/")
-                | Annotation.thumbnail_path.startswith("/")
-            )
+            select(Annotation).where(Annotation.image_path.startswith("/") | Annotation.thumbnail_path.startswith("/"))
         )
         rows = result.scalars().all()
         for ann in rows:

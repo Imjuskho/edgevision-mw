@@ -6,6 +6,7 @@ auto-labeling when a SAM decoder is unavailable (the bundled MobileSAM
 decoder export is not CPU-runnable), while remaining a clean drop-in
 alternative when a valid model is deployed via ``YOLOV8_SEG_MODEL_PATH``.
 """
+
 from __future__ import annotations
 
 import threading
@@ -18,19 +19,86 @@ from app.core.logging import get_logger
 logger = get_logger("edgevision.yolo_seg")
 
 _NAMES = [
-    "person", "bicycle", "car", "motorcycle", "airplane", "bus", "train",
-    "truck", "boat", "traffic light", "fire hydrant", "stop sign",
-    "parking meter", "bench", "bird", "cat", "dog", "horse", "sheep", "cow",
-    "elephant", "bear", "zebra", "giraffe", "backpack", "umbrella", "handbag",
-    "tie", "suitcase", "frisbee", "skis", "snowboard", "sports ball", "kite",
-    "baseball bat", "baseball glove", "skateboard", "surfboard",
-    "tennis racket", "bottle", "wine glass", "cup", "fork", "knife", "spoon",
-    "bowl", "banana", "apple", "sandwich", "orange", "broccoli", "carrot",
-    "hot dog", "pizza", "donut", "cake", "chair", "couch", "potted plant",
-    "bed", "dining table", "toilet", "tv", "laptop", "mouse", "remote",
-    "keyboard", "cell phone", "microwave", "oven", "toaster", "sink",
-    "refrigerator", "book", "clock", "vase", "scissors", "teddy bear",
-    "hair drier", "toothbrush",
+    "person",
+    "bicycle",
+    "car",
+    "motorcycle",
+    "airplane",
+    "bus",
+    "train",
+    "truck",
+    "boat",
+    "traffic light",
+    "fire hydrant",
+    "stop sign",
+    "parking meter",
+    "bench",
+    "bird",
+    "cat",
+    "dog",
+    "horse",
+    "sheep",
+    "cow",
+    "elephant",
+    "bear",
+    "zebra",
+    "giraffe",
+    "backpack",
+    "umbrella",
+    "handbag",
+    "tie",
+    "suitcase",
+    "frisbee",
+    "skis",
+    "snowboard",
+    "sports ball",
+    "kite",
+    "baseball bat",
+    "baseball glove",
+    "skateboard",
+    "surfboard",
+    "tennis racket",
+    "bottle",
+    "wine glass",
+    "cup",
+    "fork",
+    "knife",
+    "spoon",
+    "bowl",
+    "banana",
+    "apple",
+    "sandwich",
+    "orange",
+    "broccoli",
+    "carrot",
+    "hot dog",
+    "pizza",
+    "donut",
+    "cake",
+    "chair",
+    "couch",
+    "potted plant",
+    "bed",
+    "dining table",
+    "toilet",
+    "tv",
+    "laptop",
+    "mouse",
+    "remote",
+    "keyboard",
+    "cell phone",
+    "microwave",
+    "oven",
+    "toaster",
+    "sink",
+    "refrigerator",
+    "book",
+    "clock",
+    "vase",
+    "scissors",
+    "teddy bear",
+    "hair drier",
+    "toothbrush",
 ]
 
 # COCO class → EdgeVision taxonomy label
@@ -113,10 +181,7 @@ def _find_model() -> Path | None:
     candidates = []
     if settings.YOLOV8_SEG_MODEL_PATH:
         candidates.append(Path(settings.YOLOV8_SEG_MODEL_PATH))
-    candidates.append(
-        Path(__file__).resolve().parents[2]
-        / "frontend/public/models/yolov8n-seg-fp32.onnx"
-    )
+    candidates.append(Path(__file__).resolve().parents[2] / "frontend/public/models/yolov8n-seg-fp32.onnx")
     for p in candidates:
         if p.exists():
             return p
@@ -154,9 +219,7 @@ class YoloSegSegmenter:
         try:
             import onnxruntime as ort
 
-            providers = [
-                p for p in ("CPUExecutionProvider",) if p in ort.get_available_providers()
-            ]
+            providers = [p for p in ("CPUExecutionProvider",) if p in ort.get_available_providers()]
             self._session = ort.InferenceSession(str(self._model_path), providers=providers)
             self._input_name = self._session.get_inputs()[0].name
             self._output_names = [o.name for o in self._session.get_outputs()]
@@ -184,9 +247,7 @@ class YoloSegSegmenter:
         try:
             import cv2
 
-            arr = cv2.imdecode(
-                np.frombuffer(image_bytes, dtype=np.uint8), cv2.IMREAD_COLOR
-            )
+            arr = cv2.imdecode(np.frombuffer(image_bytes, dtype=np.uint8), cv2.IMREAD_COLOR)
             if arr is None:
                 return []
             orig_h, orig_w = arr.shape[:2]
@@ -194,8 +255,11 @@ class YoloSegSegmenter:
                 blob, pad_x, pad_y, scale = self._preprocess(arr)
                 outputs = self._session.run(self._output_names, {self._input_name: blob})
             return self._postprocess(
-                outputs, (orig_h, orig_w), (pad_x, pad_y, scale),
-                conf_threshold, iou_threshold,
+                outputs,
+                (orig_h, orig_w),
+                (pad_x, pad_y, scale),
+                conf_threshold,
+                iou_threshold,
             )
         except Exception as exc:
             logger.error("yolo_seg_detect_failed", error=str(exc))
@@ -211,7 +275,7 @@ class YoloSegSegmenter:
         canvas = np.full((self._input_size, self._input_size, 3), 114, dtype=np.uint8)
         pad_x = (self._input_size - nw) // 2
         pad_y = (self._input_size - nh) // 2
-        canvas[pad_y:pad_y + nh, pad_x:pad_x + nw] = resized
+        canvas[pad_y : pad_y + nh, pad_x : pad_x + nw] = resized
         blob = np.transpose(canvas.astype(np.float32) / 255.0, (2, 0, 1))[np.newaxis]
         return blob, pad_x, pad_y, scale
 
@@ -274,8 +338,8 @@ class YoloSegSegmenter:
                 mask_full = cv2.resize(mask_160, (self._input_size, self._input_size))
                 # strip letterbox padding
                 mask_crop = mask_full[
-                    pad_y:pad_y + round(orig_h * scale),
-                    pad_x:pad_x + round(orig_w * scale),
+                    pad_y : pad_y + round(orig_h * scale),
+                    pad_x : pad_x + round(orig_w * scale),
                 ]
                 mask_crop = cv2.resize(mask_crop, (orig_w, orig_h))
                 mask_bin = (mask_crop > 0.5).astype(np.uint8)
@@ -290,18 +354,20 @@ class YoloSegSegmenter:
                 pass
 
             class_name = _NAMES[class_ids[i]] if class_ids[i] < len(_NAMES) else f"class_{class_ids[i]}"
-            results.append({
-                "class_name": class_name,
-                "taxonomy": SEG_TO_TAXONOMY.get(class_name, class_name),
-                "confidence": round(confidences[i], 4),
-                "bbox": [
-                    round(x1_orig / orig_w, 4),
-                    round(y1_orig / orig_h, 4),
-                    round(w_orig / orig_w, 4),
-                    round(h_orig / orig_h, 4),
-                ],
-                "mask": (mask > 0),
-            })
+            results.append(
+                {
+                    "class_name": class_name,
+                    "taxonomy": SEG_TO_TAXONOMY.get(class_name, class_name),
+                    "confidence": round(confidences[i], 4),
+                    "bbox": [
+                        round(x1_orig / orig_w, 4),
+                        round(y1_orig / orig_h, 4),
+                        round(w_orig / orig_w, 4),
+                        round(h_orig / orig_h, 4),
+                    ],
+                    "mask": (mask > 0),
+                }
+            )
         return results
 
     def _nms(self, boxes: list[list[float]], scores: list[float], iou_threshold: float) -> list[int]:
@@ -385,10 +451,14 @@ def attach_masks_from_instances(
         d = dict(det)
         dbox = det.get("bbox", [0, 0, 0, 0])
         if len(dbox) == 4 and dbox[2] <= 1.0 and dbox[3] <= 1.0:
-            px_box = np.array([
-                dbox[0] * img_w, dbox[1] * img_h,
-                (dbox[0] + dbox[2]) * img_w, (dbox[1] + dbox[3]) * img_h,
-            ])
+            px_box = np.array(
+                [
+                    dbox[0] * img_w,
+                    dbox[1] * img_h,
+                    (dbox[0] + dbox[2]) * img_w,
+                    (dbox[1] + dbox[3]) * img_h,
+                ]
+            )
         else:
             px_box = np.array([dbox[0], dbox[1], dbox[2], dbox[3]], dtype=np.float64)
 
@@ -397,10 +467,14 @@ def attach_masks_from_instances(
         for inst in instances:
             ib = inst["bbox"]
             if ib[2] <= 1.0:
-                ibox = np.array([
-                    ib[0] * img_w, ib[1] * img_h,
-                    (ib[0] + ib[2]) * img_w, (ib[1] + ib[3]) * img_h,
-                ])
+                ibox = np.array(
+                    [
+                        ib[0] * img_w,
+                        ib[1] * img_h,
+                        (ib[0] + ib[2]) * img_w,
+                        (ib[1] + ib[3]) * img_h,
+                    ]
+                )
             else:
                 ibox = np.array([ib[0], ib[1], ib[0] + ib[2], ib[1] + ib[3]])
             val = _iou(px_box, ibox)
@@ -436,16 +510,20 @@ def attach_mask_polygons(
     import cv2
 
     arr = cv2.imdecode(np.frombuffer(image_bytes, dtype=np.uint8), cv2.IMREAD_COLOR)
-    oh, ow = (arr.shape[:2] if arr is not None else (1, 1))
+    oh, ow = arr.shape[:2] if arr is not None else (1, 1)
 
     for det in detections:
         d = dict(det)
         dbox = det.get("bbox", [0, 0, 0, 0])
         if len(dbox) == 4 and dbox[2] <= 1.0:
-            px_box = np.array([
-                dbox[0] * ow, dbox[1] * oh,
-                (dbox[0] + dbox[2]) * ow, (dbox[1] + dbox[3]) * oh,
-            ])
+            px_box = np.array(
+                [
+                    dbox[0] * ow,
+                    dbox[1] * oh,
+                    (dbox[0] + dbox[2]) * ow,
+                    (dbox[1] + dbox[3]) * oh,
+                ]
+            )
         else:
             px_box = np.array([dbox[0], dbox[1], dbox[2], dbox[3]])
 

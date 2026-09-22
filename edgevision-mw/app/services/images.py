@@ -47,16 +47,16 @@ async def process_upload(
 
     # 2. Normalize (WebP/TIFF/BMP → PNG)
     strip_exif = source != "drone"
-    normalized_bytes, output_format = normalize_image(
-        file_bytes, strip_exif=strip_exif
-    )
+    normalized_bytes, output_format = normalize_image(file_bytes, strip_exif=strip_exif)
     if output_format == "JPEG":
         final_content_type = "image/jpeg"
         ext = "jpg"
     else:
         final_content_type = "image/png"
         ext = "png"
-    logger.info("svc_normalize_done", trace_id=trace_id, output_format=output_format, normalized_size=len(normalized_bytes))
+    logger.info(
+        "svc_normalize_done", trace_id=trace_id, output_format=output_format, normalized_size=len(normalized_bytes)
+    )
 
     # 3. Extract EXIF
     exif_data = extract_exif(file_bytes) if source == "drone" else None
@@ -156,9 +156,7 @@ async def process_upload(
             if ds is not None:
                 batch = await _get_or_create_studio_batch(db, ds)
                 max_idx = (
-                    await db.execute(
-                        select(func.max(Annotation.image_index)).where(Annotation.dataset_id == ds.id)
-                    )
+                    await db.execute(select(func.max(Annotation.image_index)).where(Annotation.dataset_id == ds.id))
                 ).scalar()
                 next_index = (max_idx if max_idx is not None else -1) + 1
 
@@ -178,6 +176,7 @@ async def process_upload(
                 await db.flush()
 
                 from app.core.config import settings as _settings
+
                 if _settings.AUTO_PRELABEL_ON_UPLOAD:
                     from app.workers.tasks import auto_label_annotations_task
 

@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useRef, useEffect } from "react";
 import { useTranslation } from "react-i18next";
+import { AxiosError } from "axios";
 import api from "../../services/api";
 import { PageShell } from "../PageShell";
 import { useStudioSettings } from "../../context/StudioSettingsContext";
@@ -30,7 +31,6 @@ interface ExportFormat {
 
 interface Props {
   datasetId: string;
-  onNavigate?: (path: string) => void;
 }
 
 const FORMATS: ExportFormat[] = [
@@ -49,7 +49,7 @@ const DEFAULT_AUG: AugmentationConfig = {
   mixup: false,
 };
 
-export const ExportPreview: React.FC<Props> = ({ datasetId, onNavigate: _onNavigate }) => {
+export const ExportPreview: React.FC<Props> = ({ datasetId }) => {
   const { t } = useTranslation();
   const { expertMode } = useStudioSettings();
   const [format, setFormat] = useState<string>("coco");
@@ -83,9 +83,10 @@ export const ExportPreview: React.FC<Props> = ({ datasetId, onNavigate: _onNavig
         sample_size: 10,
       });
       setPreviewImages(res.data.preview_images || []);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Preview generation failed:", err);
-      setError(err.response?.data?.detail || "Preview failed");
+      const detail = err instanceof AxiosError ? err.response?.data?.detail : undefined;
+      setError(detail || "Preview failed");
     } finally {
       setIsGenerating(false);
     }
@@ -109,9 +110,10 @@ export const ExportPreview: React.FC<Props> = ({ datasetId, onNavigate: _onNavig
       setBuildJobId(res.data.job_id);
       setBuildStatus("PENDING");
       pollBuildStatus(res.data.job_id);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Export build failed:", err);
-      setError(err.response?.data?.detail || "Build failed");
+      const detail = err instanceof AxiosError ? err.response?.data?.detail : undefined;
+      setError(detail || "Build failed");
       setIsBuilding(false);
     }
   };
@@ -145,9 +147,9 @@ export const ExportPreview: React.FC<Props> = ({ datasetId, onNavigate: _onNavig
         setError(t("export.buildFailed", "Export build failed — check connection and retry"));
       }
     }, 3000);
-  }, []);
+  }, [t]);
 
-  const updateAug = (key: keyof AugmentationConfig, value: any) => {
+  const updateAug = (key: keyof AugmentationConfig, value: boolean | number) => {
     setAugmentations((prev) => ({ ...prev, [key]: value }));
   };
 

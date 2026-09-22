@@ -1,7 +1,8 @@
 {
   "common": {
     "cancel": "Cancel",
-    "ok": "OK"
+    "ok": "OK",
+    "searchCommands": "Search commands…"
   },
   "app": {
     "name": "EdgeVision Studio",
@@ -50,9 +51,13 @@
       "quality": "Quality",
       "analysis": "Analysis",
       "taxonomies": "Taxonomies",
-      "trainExport": "Train & Export"
+      "trainExport": "Train & Export",
+      "revenue": "Revenue & Marketplace"
     },
-    "logout": "Logout"
+    "logout": "Logout",
+    "operator": "Operator Console",
+    "buyer": "Buyer Dashboard",
+    "subject": "Subject Portal"
   },
   "views": {
     "home": "Dashboard",
@@ -304,7 +309,11 @@
     "createFallback": "Proceeding to upload — dataset will be created on first upload",
     "errorTitle": "Could not load datasets",
     "errorBody": "Check your connection and try again.",
-    "retry": "Retry"
+    "retry": "Retry",
+    "tierCurated": "Curated",
+    "tierAnnotated": "Annotated",
+    "tierRaw": "Raw",
+    "tierUnknown": "Unknown"
   },
   "canvas": {
     "aiAssist": "AI Assist",
@@ -587,6 +596,7 @@
     "preLabelHint": "Pre-labels are not saved until you click Save",
     "aiModelsUnavailable": "No AI models available. Run ./scripts/download_ai_models.sh on the server.",
     "searchLabels": "Search labels...",
+    "searchLabel": "Search label...",
     "noLabelsFound": "No labels found",
     "unsaved": "Unsaved",
     "inspector": "Inspector",
@@ -598,6 +608,13 @@
     "noMoreUnlabeled": "No more unlabeled images in this batch",
     "aiRunning": "Running AI detection…",
     "aiLoadFailed": "Failed to load AI models",
+    "noMatches": "No matches",
+    "escToClose": "Esc to close",
+    "labelCount": "{{count}} labels",
+    "hintPolygon": "Click to add vertices · Double-click to close polygon · Delete to remove selected",
+    "hintBbox": "Click/drag to draw · Double-click box to edit label · Shift+click to multi-select · Delete/Backspace to remove",
+    "zoomPanHint": "Scroll to zoom · Space+drag or middle-click to pan",
+    "annotationCount": "{{count}} annotations",
     "categories": {
       "motorized": "Motorized Vehicles",
       "non_motorized": "Non-Motorized Vehicles",
@@ -641,6 +658,9 @@
     "allFailed": "No files uploaded. {{count}} file(s) failed validation.",
     "partialFailed": "{{count}} file(s) failed validation.",
     "newFiles": "new files",
+    "statusUploaded": "Uploaded",
+    "statusError": "Error",
+    "removeFile": "Remove",
     "modes": {
       "file": "Files",
       "webcam": "Webcam",
@@ -714,14 +734,13 @@
     "progress": "Progress",
     "status": "Status",
     "date": "Date",
-    "annotator": "by",
+    "annotator": "Annotator",
     "open": "Open",
     "certified": "Certified",
     "rejected": "Rejected",
     "all": "All",
     "reviewJob": "Review",
     "images": "images",
-    "annotator": "Annotator",
     "submitted": "Submitted",
     "deadline": "Deadline"
   },
@@ -859,7 +878,12 @@
     "cmdFailed": "Failed to send command",
     "alertsPanel": "Alerts",
     "noAlerts": "No active alerts",
-    "expertHint": "Enable Expert mode in Settings to send fleet commands."
+    "expertHint": "Enable Expert mode in Settings to send fleet commands.",
+    "noCapturesYet": "No captures yet",
+    "lastSnapshot": "Last Snapshot",
+    "eventsCaptured": "{{count}} captured",
+    "eventsUploaded": "{{count}} uploaded",
+    "lastCaptureTime": "Last: {{time}}"
   },
   "onboarding": {
     "title": "Welcome to EdgeVision Studio",
@@ -1008,7 +1032,19 @@
     "datasetRequired": "Select a dataset before saving frames",
     "datasetRequiredHint": "Open live annotate from a dataset to save AI labels into the studio.",
     "noAnnotationsHint": "No detections — saving frame only (no AI prelabels)",
-    "openInStudio": "Edit in studio"
+    "openInStudio": "Edit in studio",
+    "autoSave": "Auto-save clips on event",
+    "events": "Events",
+    "noEvents": "No events yet",
+    "eventSaved": "saved",
+    "autoSaveSuccess": "Event clip auto-saved to dataset",
+    "eventType": {
+      "rule": "Rule triggered",
+      "dwell": "Dwell",
+      "presence": "Presence",
+      "confidenceDrop": "Confidence drop",
+      "closeApproach": "Close approach"
+    }
   },
   "turboReview": {
     "liveCaptures": "Live captures",
@@ -1051,5 +1087,64 @@
     "openInStudioHint": "Full box and polygon editing on the annotate page",
     "helpOpenStudio": "Open in studio for full edits",
     "aiDraftChip": "AI draft labels"
+  },
+  "operator": {
+    "title": "Operator Console",
+    "subtitle": "Live monitoring and alert management",
+    "overview": "Overview",
+    "totalEarnings": "Total Earnings",
+    "totalAnnotations": "Total Annotations",
+    "pendingAlerts": "Pending Alerts",
+    "totalEvents": "Perception Events",
+    "liveEvents": "Live Perception Events",
+    "markSeen": "Mark read",
+    "loadingEvents": "Loading events...",
+    "loadingEventsBody": "Connecting to perception engine",
+    "noEvents": "No perception events yet",
+    "noEventsBody": "Events will appear here when the live annotation engine detects dwell, presence, confidence drops, or close approach.",
+    "eventsTotal": "{{total}} total events recorded",
+    "alerts": "System Alerts",
+    "noAlerts": "No alerts",
+    "noAlertsBody": "All systems operational.",
+    "acknowledge": "Acknowledge",
+    "payoutHistory": "Payout History",
+    "noPayouts": "No payouts",
+    "noPayoutsBody": "Payouts will appear here.",
+    "nodeStatus": "Node Status",
+    "nodeId": "Node ID",
+    "noNode": "No node linked",
+    "noNodeBody": "Contact admin to link a node.",
+    "loadError": "Failed to load dashboard",
+    "noData": "No data available",
+    "newCount": "{{count}} new"
+  },
+  "subject": {
+    "consentActive": "Active",
+    "consentWithdrawn": "Withdrawn",
+    "consentExpired": "Expired"
+  },
+  "marketplace": {
+    "title": "Dataset Marketplace",
+    "subtitle": "Browse and license certified datasets from Malawi field captures.",
+    "search": "Search datasets",
+    "filterLicense": "Filter by license",
+    "filterCategory": "Filter by category",
+    "allLicenses": "All licenses",
+    "allCategories": "All categories",
+    "requestQuote": "Request Quote",
+    "quoting": "Quoting...",
+    "quoteResult": "Quote: ${{price}} (expires {{date}})",
+    "quoteFailed": "Could not generate quote. Please try again.",
+    "noResults": "No datasets found",
+    "noResultsBody": "Try adjusting your search or filters.",
+    "found": "{{count}} datasets available",
+    "samples": "{{count}} samples",
+    "classes": "{{count}} classes",
+    "price": "From ${{price}}",
+    "iaaScore": "IAA {{score}}%",
+    "consentCoverage": "{{pct}}% consent",
+    "browse": "Browse Marketplace",
+    "loadFailed": "Could not load datasets",
+    "loadFailedBody": "Check your connection and try again."
   }
 }

@@ -21,9 +21,7 @@ TEMP_HIGH_THRESHOLD = 85.0
 STORAGE_HIGH_THRESHOLD = 0.90
 
 
-async def record_heartbeat(
-    db: AsyncSession, node_id: UUID, payload: HeartbeatPayload
-) -> HeartbeatResponse:
+async def record_heartbeat(db: AsyncSession, node_id: UUID, payload: HeartbeatPayload) -> HeartbeatResponse:
     now = datetime.now(UTC)
 
     heartbeat = Heartbeat(
@@ -44,6 +42,11 @@ async def record_heartbeat(
         raw_diagnostics=payload.raw_diagnostics,
     )
     db.add(heartbeat)
+
+    # Capture the previous heartbeat time before updating, so the offline
+    # alert uses the real gap between heartbeats.
+    prev_result = await db.execute(select(Node.last_heartbeat_at).where(Node.id == node_id))
+    prev_heartbeat_at = prev_result.scalar_one_or_none()
 
     # Derive node status from telemetry instead of unconditionally setting ONLINE (C7)
     node_status = _derive_node_status(payload)
@@ -66,19 +69,15 @@ async def record_heartbeat(
         network = dict(node.network_config) if node.network_config else {}
         pending_commands = network.pop("_pending_commands", [])
         if pending_commands:
-            await db.execute(
-                update(Node)
-                .where(Node.id == node_id)
-                .values(network_config=network)
-            )
+            await db.execute(update(Node).where(Node.id == node_id).values(network_config=network))
+            await db.flush()
 
-    await db.commit()
-
-    # Post-commit: generate alerts and write audit_log entries
+    # Generate alerts BEFORE the single commit so heartbeat + alerts are
+    # written atomically (no alert-loss window on commit failure) (M1).
     alerts = check_node_health_from_payload(payload)
 
-    if node and node.last_heartbeat_at:
-        hours_since = (now - node.last_heartbeat_at).total_seconds() / 3600
+    if prev_heartbeat_at:
+        hours_since = (now - prev_heartbeat_at).total_seconds() / 3600
         if hours_since > 6:
             alerts.append(f"OFFLINE for {hours_since:.1f} hours")
 
@@ -94,8 +93,8 @@ async def record_heartbeat(
             details={"alert": alert_msg, "node_id": str(node_id)},
         )
         db.add(audit)
-    if alerts:
-        await db.commit()
+
+    await db.commit()
 
     return HeartbeatResponse(
         received=True,
@@ -157,10 +156,12 @@ async def check_heartbeat_timeouts(db: AsyncSession) -> list[dict]:
     cutoff = datetime.now(UTC) - timedelta(hours=HEARTBEAT_TIMEOUT_HOURS)
 
     result = await db.execute(
-        select(Node).where(
+        select(Node)
+        .where(
             Node.is_enabled.is_(True),
             Node.status != NodeStatus.OFFLINE,
-        ).with_for_update(skip_locked=True)
+        )
+        .with_for_update(skip_locked=True)
     )
     nodes = result.scalars().all()
 
@@ -168,11 +169,13 @@ async def check_heartbeat_timeouts(db: AsyncSession) -> list[dict]:
     for node in nodes:
         if node.last_heartbeat_at is None or node.last_heartbeat_at < cutoff:
             node.status = NodeStatus.OFFLINE
-            timed_out.append({
-                "node_id": node.node_id,
-                "district": node.district,
-                "last_heartbeat": node.last_heartbeat_at.isoformat() if node.last_heartbeat_at else None,
-            })
+            timed_out.append(
+                {
+                    "node_id": node.node_id,
+                    "district": node.district,
+                    "last_heartbeat": node.last_heartbeat_at.isoformat() if node.last_heartbeat_at else None,
+                }
+            )
 
     if timed_out:
         await db.commit()
@@ -180,6 +183,7 @@ async def check_heartbeat_timeouts(db: AsyncSession) -> list[dict]:
 
         # Write audit log
         from app.models.audit import AuditLog
+
         audit = AuditLog(
             event_type="NODES_TIMED_OUT",
             severity="WARNING",
@@ -197,7 +201,9 @@ async def check_heartbeat_timeouts(db: AsyncSession) -> list[dict]:
     return timed_out
 
 
-async def get_fleet_status(db: AsyncSession, filters: dict | None = None, limit: int = 50, offset: int = 0) -> list[dict]:
+async def get_fleet_status(
+    db: AsyncSession, filters: dict | None = None, limit: int = 50, offset: int = 0
+) -> list[dict]:
     query = select(Node)
     if filters:
         conditions = []
@@ -247,9 +253,7 @@ async def get_fleet_status(db: AsyncSession, filters: dict | None = None, limit:
         storage_pct = 0.0
         if latest_hb:
             battery_pct = (latest_hb.battery_voltage / 12.6) * 100
-            storage_pct = (
-                latest_hb.storage_used_gb / max(latest_hb.storage_total_gb, 0.001)
-            ) * 100
+            storage_pct = (latest_hb.storage_used_gb / max(latest_hb.storage_total_gb, 0.001)) * 100
         fleet.append(
             {
                 "node_id": node.node_id,
@@ -271,10 +275,7 @@ async def get_node_detail(db: AsyncSession, node_id: str) -> dict | None:
         return None
 
     hb_result = await db.execute(
-        select(Heartbeat)
-        .where(Heartbeat.node_id == node.id)
-        .order_by(Heartbeat.created_at.desc())
-        .limit(10)
+        select(Heartbeat).where(Heartbeat.node_id == node.id).order_by(Heartbeat.created_at.desc()).limit(10)
     )
     recent_hbs = hb_result.scalars().all()
 
@@ -284,9 +285,7 @@ async def get_node_detail(db: AsyncSession, node_id: str) -> dict | None:
     }
 
 
-async def send_node_command(
-    db: AsyncSession, node_id: str, command: dict
-) -> bool:
+async def send_node_command(db: AsyncSession, node_id: str, command: dict) -> bool:
     # First resolve the string node_id to the internal UUID primary key
     node_uuid = await db.scalar(select(Node.id).where(Node.node_id == node_id))
     if node_uuid is None:
@@ -297,25 +296,21 @@ async def send_node_command(
     current_network = result.scalar_one_or_none()
     network = dict(current_network) if current_network else {}
     pending = network.get("_pending_commands", [])
-    pending.append({
-        "command": command.get("command"),
-        "payload": command.get("payload", {}),
-        "created_at": datetime.now(UTC).isoformat(),
-    })
+    pending.append(
+        {
+            "command": command.get("command"),
+            "payload": command.get("payload", {}),
+            "created_at": datetime.now(UTC).isoformat(),
+        }
+    )
     network["_pending_commands"] = pending[-10:]  # keep last 10
 
-    await db.execute(
-        update(Node)
-        .where(Node.id == node_uuid)
-        .values(network_config=network)
-    )
+    await db.execute(update(Node).where(Node.id == node_uuid).values(network_config=network))
     await db.commit()
     return True
 
 
-async def get_telemetry(
-    db: AsyncSession, node_id: str, hours: int = 24
-) -> list[dict]:
+async def get_telemetry(db: AsyncSession, node_id: str, hours: int = 24) -> list[dict]:
     node_result = await db.execute(select(Node.id).where(Node.node_id == node_id))
     node_uuid = node_result.scalar_one_or_none()
     if node_uuid is None:

@@ -17,7 +17,6 @@ describe("AnnotationOverlay invariants", () => {
         videoWidth={640}
         videoHeight={480}
         previewMirrored
-        orientation="normal"
       />,
     );
 

@@ -87,9 +87,7 @@ async def _get_or_create_studio_batch(db: AsyncSession, ds: Dataset):
     from app.models.enums import BatchStatus
     from app.models.ingestion import IngestionBatch
 
-    stmt = select(IngestionBatch).where(
-        IngestionBatch.batch_id.startswith(f"STUDIO-{ds.dataset_id}")
-    ).limit(1)
+    stmt = select(IngestionBatch).where(IngestionBatch.batch_id.startswith(f"STUDIO-{ds.dataset_id}")).limit(1)
     batch = (await db.execute(stmt)).scalar_one_or_none()
     if batch is not None:
         return batch
@@ -238,11 +236,7 @@ async def list_images(
     await db.commit()
     await db.refresh(ds)
 
-    stmt = (
-        select(Annotation)
-        .where(Annotation.dataset_id == ds.id)
-        .order_by(Annotation.image_index)
-    )
+    stmt = select(Annotation).where(Annotation.dataset_id == ds.id).order_by(Annotation.image_index)
 
     count_stmt = select(func.count()).select_from(stmt.subquery())
     total = (await db.execute(count_stmt)).scalar() or 0
@@ -418,15 +412,14 @@ async def serve_image(
 
     try:
         from app.core.config import settings
-        from app.core.dependencies import get_minio_client
+        from app.core.minio_helper import get_object_bytes
 
-        mc = await get_minio_client()
-        response = mc.get_object(
-            settings.MINIO_BUCKET, annotation.image_path
-        )
+        data = await get_object_bytes(settings.MINIO_BUCKET, annotation.image_path)
+        ext = annotation.image_path.rsplit(".", 1)[-1].lower() if "." in annotation.image_path else "png"
+        media_type = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png", "webp": "image/webp"}.get(ext, "image/png")
         return StreamingResponse(
-            iter([response.read()]),
-            media_type="image/png",
+            iter([data]),
+            media_type=media_type,
             headers={"Content-Disposition": f'inline; filename="{annotation.image_path.split("/")[-1]}"'},
         )
     except HTTPException:
@@ -445,7 +438,6 @@ async def get_health(
     db: AsyncSession = Depends(get_db),
 ):
     ds = await _resolve_dataset(db, dataset_id)
-
 
     total_stmt = select(func.count()).where(Annotation.dataset_id == ds.id)
     total = (await db.execute(total_stmt)).scalar() or 0
@@ -515,11 +507,16 @@ async def create_export(
 
     try:
         from app.workers.tasks import _export_build_async
+
         await db.commit()
         await _export_build_async(
-            str(job.id), ds.dataset_id, body.format,
+            str(job.id),
+            ds.dataset_id,
+            body.format,
             {"train": 0.8, "val": 0.1, "test": 0.1},
-            None, [], True,
+            None,
+            [],
+            True,
         )
     except Exception as exc:
         job.status = "FAILED"
@@ -567,6 +564,7 @@ async def download_export(
     try:
         from app.core.config import settings
         from app.core.dependencies import get_minio_client
+
         mc = await get_minio_client()
         object_name = f"exports/{export_id}/coco.json"
         response = mc.get_object(settings.MINIO_BUCKET, object_name)
@@ -761,10 +759,7 @@ async def review_queue(
         raise HTTPException(status_code=403, detail="Not your session")
 
     stmt = (
-        select(Annotation)
-        .where(Annotation.dataset_id == sess.dataset_id)
-        .order_by(Annotation.image_index)
-        .limit(limit)
+        select(Annotation).where(Annotation.dataset_id == sess.dataset_id).order_by(Annotation.image_index).limit(limit)
     )
     rows = (await db.execute(stmt)).scalars().all()
 
@@ -773,34 +768,36 @@ async def review_queue(
         labels_data = a.human_labels or {}
         boxes = labels_data.get("boxes", []) if isinstance(labels_data, dict) else []
         detected_raw = a.detected_objects if isinstance(a.detected_objects, dict) else {}
-        images.append({
-            "id": str(a.id),
-            "image_path": a.image_path,
-            "index": a.image_index,
-            "image_index": a.image_index,
-            "status": "pending" if not a.is_certified else "approved",
-            "annotations": [
-                {
-                    "className": b.get("label", ""),
-                    "confidence": b.get("confidence", 1.0),
-                    "bbox": [
-                        b.get("x", 0),
-                        b.get("y", 0),
-                        b.get("width", 0),
-                        b.get("height", 0),
-                    ],
-                    "polygon": b.get("polygon"),
-                }
-                for b in boxes
-            ],
-            "has_human_labels": a.human_labels is not None,
-            "ai_draft": bool(labels_data.get("ai_draft")),
-            "label_source": labels_data.get("source"),
-            "live_capture": bool(detected_raw.get("live_capture")),
-            "orientation": detected_raw.get("orientation"),
-            "depth_available": detected_raw.get("depth_available"),
-            "detected_objects": _extract_detected_objects(a),
-        })
+        images.append(
+            {
+                "id": str(a.id),
+                "image_path": a.image_path,
+                "index": a.image_index,
+                "image_index": a.image_index,
+                "status": "pending" if not a.is_certified else "approved",
+                "annotations": [
+                    {
+                        "className": b.get("label", ""),
+                        "confidence": b.get("confidence", 1.0),
+                        "bbox": [
+                            b.get("x", 0),
+                            b.get("y", 0),
+                            b.get("width", 0),
+                            b.get("height", 0),
+                        ],
+                        "polygon": b.get("polygon"),
+                    }
+                    for b in boxes
+                ],
+                "has_human_labels": a.human_labels is not None,
+                "ai_draft": bool(labels_data.get("ai_draft")),
+                "label_source": labels_data.get("source"),
+                "live_capture": bool(detected_raw.get("live_capture")),
+                "orientation": detected_raw.get("orientation"),
+                "depth_available": detected_raw.get("depth_available"),
+                "detected_objects": _extract_detected_objects(a),
+            }
+        )
 
     return {"images": images, "total": len(images)}
 

@@ -76,9 +76,7 @@ async def get_dataset(
 
     from app.models.dataset import Dataset
 
-    result = await db.execute(
-        select(Dataset).where(Dataset.dataset_id == dataset_id)
-    )
+    result = await db.execute(select(Dataset).where(Dataset.dataset_id == dataset_id))
     dataset = result.scalar_one_or_none()
     if dataset is None:
         raise HTTPException(
@@ -135,7 +133,7 @@ async def request_quote(
 ):
     try:
         quote_data = body.model_dump()
-        quote_data["buyer_id"] = user.get("id")
+        quote_data["buyer_id"] = user.get("sub")
         return await generate_quote(db, quote_data)
     except ValueError as exc:
         raise HTTPException(
@@ -154,8 +152,9 @@ async def get_quote(
 
     from app.models.quote import Quote
 
+    buyer_id = UUID(user["sub"])
     result = await db.execute(
-        select(Quote).where(Quote.id == quote_id)
+        select(Quote).where(Quote.id == quote_id, Quote.buyer_id == buyer_id)
     )
     quote = result.scalar_one_or_none()
     if quote is None:

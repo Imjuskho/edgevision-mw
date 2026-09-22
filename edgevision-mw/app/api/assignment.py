@@ -61,11 +61,15 @@ async def create_assignments(
     for idx, aid in enumerate(annotator_ids):
         count = per_annotator + (1 if idx < remainder else 0)
 
-        existing_stmt = select(DatasetAssignment).where(
-            DatasetAssignment.dataset_id == ds.id,
-            DatasetAssignment.annotator_id == aid,
-            DatasetAssignment.status.in_(["ASSIGNED", "IN_PROGRESS"]),
-        ).limit(1)
+        existing_stmt = (
+            select(DatasetAssignment)
+            .where(
+                DatasetAssignment.dataset_id == ds.id,
+                DatasetAssignment.annotator_id == aid,
+                DatasetAssignment.status.in_(["ASSIGNED", "IN_PROGRESS"]),
+            )
+            .limit(1)
+        )
         existing = (await db.execute(existing_stmt)).scalar_one_or_none()
 
         if existing:
@@ -162,25 +166,23 @@ async def annotator_queue(
         )
         labeled_count = (await db.execute(labeled_stmt)).scalar() or 0
 
-        is_overdue = (
-            a.deadline is not None
-            and a.deadline < datetime.now(UTC)
-            and a.status != "COMPLETED"
-        )
+        is_overdue = a.deadline is not None and a.deadline < datetime.now(UTC) and a.status != "COMPLETED"
 
-        items.append(QueueItem(
-            assignment_id=a.id,
-            dataset_id=ds.dataset_id,
-            dataset_name=ds.name,
-            status=a.status,
-            deadline=a.deadline,
-            priority=a.priority,
-            total_images=a.total_images,
-            completed_images=labeled_count,
-            progress_pct=round((labeled_count / a.total_images * 100) if a.total_images > 0 else 0, 1),
-            is_overdue=is_overdue,
-            image_count_available=a.total_images - labeled_count,
-        ))
+        items.append(
+            QueueItem(
+                assignment_id=a.id,
+                dataset_id=ds.dataset_id,
+                dataset_name=ds.name,
+                status=a.status,
+                deadline=a.deadline,
+                priority=a.priority,
+                total_images=a.total_images,
+                completed_images=labeled_count,
+                progress_pct=round((labeled_count / a.total_images * 100) if a.total_images > 0 else 0, 1),
+                is_overdue=is_overdue,
+                image_count_available=a.total_images - labeled_count,
+            )
+        )
 
     return QueueResponse(items=items, total=len(items))
 
@@ -250,11 +252,7 @@ async def _format_assignment(db: AsyncSession, a: DatasetAssignment) -> Assignme
     )
     labeled_count = (await db.execute(labeled_stmt)).scalar() or 0
 
-    is_overdue = (
-        a.deadline is not None
-        and a.deadline < datetime.now(UTC)
-        and a.status != "COMPLETED"
-    )
+    is_overdue = a.deadline is not None and a.deadline < datetime.now(UTC) and a.status != "COMPLETED"
 
     return AssignmentResponse(
         id=a.id,

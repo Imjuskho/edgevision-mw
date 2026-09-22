@@ -13,7 +13,14 @@ logger = get_logger("edgevision.exceptions")
 class AppError(Exception):
     """Base application error."""
 
-    def __init__(self, detail: str, status_code: int = 500, resource: str | None = None, trace_id: str | None = None, detail_dict: dict | None = None):
+    def __init__(
+        self,
+        detail: str,
+        status_code: int = 500,
+        resource: str | None = None,
+        trace_id: str | None = None,
+        detail_dict: dict | None = None,
+    ):
         self.detail = detail
         self.status_code = status_code
         self.resource = resource
@@ -44,28 +51,52 @@ class AuthenticationError(AppError):
 class StorageError(AppError):
     """MinIO or filesystem operation failed."""
 
-    def __init__(self, detail: str = "Storage operation failed", resource: str | None = None, trace_id: str | None = None, detail_dict: dict | None = None):
+    def __init__(
+        self,
+        detail: str = "Storage operation failed",
+        resource: str | None = None,
+        trace_id: str | None = None,
+        detail_dict: dict | None = None,
+    ):
         super().__init__(detail=detail, status_code=500, resource=resource, trace_id=trace_id, detail_dict=detail_dict)
 
 
 class DatabaseError(AppError):
     """Database operation failed (connection, constraint, etc.)."""
 
-    def __init__(self, detail: str = "Database operation failed", resource: str | None = None, trace_id: str | None = None, detail_dict: dict | None = None):
+    def __init__(
+        self,
+        detail: str = "Database operation failed",
+        resource: str | None = None,
+        trace_id: str | None = None,
+        detail_dict: dict | None = None,
+    ):
         super().__init__(detail=detail, status_code=500, resource=resource, trace_id=trace_id, detail_dict=detail_dict)
 
 
 class InferenceError(AppError):
     """Model inference or auto-labeling failed."""
 
-    def __init__(self, detail: str = "Inference failed", resource: str | None = None, trace_id: str | None = None, detail_dict: dict | None = None):
+    def __init__(
+        self,
+        detail: str = "Inference failed",
+        resource: str | None = None,
+        trace_id: str | None = None,
+        detail_dict: dict | None = None,
+    ):
         super().__init__(detail=detail, status_code=500, resource=resource, trace_id=trace_id, detail_dict=detail_dict)
 
 
 class ValidationError(AppError):
     """Business logic validation failed (not request schema validation)."""
 
-    def __init__(self, detail: str = "Validation failed", resource: str | None = None, trace_id: str | None = None, detail_dict: dict | None = None):
+    def __init__(
+        self,
+        detail: str = "Validation failed",
+        resource: str | None = None,
+        trace_id: str | None = None,
+        detail_dict: dict | None = None,
+    ):
         super().__init__(detail=detail, status_code=422, resource=resource, trace_id=trace_id, detail_dict=detail_dict)
 
 

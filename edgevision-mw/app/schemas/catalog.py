@@ -6,6 +6,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.models.enums import LicenseType
+
 
 class DatasetResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -37,7 +39,7 @@ class DatasetBuildRequest(BaseModel):
     name: str = Field(..., max_length=200, description="Dataset name")
     annotation_ids: list[UUID] = Field(..., min_length=1, description="Certified annotation IDs to include")
     formats: list[str] = Field(default=["COCO", "YOLO"], description="Export formats to generate")
-    license_type: str = Field(default="ANNUAL", description="License type")
+    license_type: LicenseType = Field(default=LicenseType.ANNUAL, description="License type")
 
 
 class DatasetManifest(BaseModel):
@@ -55,9 +57,9 @@ class QuoteRequest(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     dataset_id: str = Field(..., description="Dataset to quote")
-    license_type: str = Field(..., description="Requested license type")
-    jurisdiction: str = Field(..., description="Buyer jurisdiction ISO code")
-    use_case: str = Field(default="", description="Intended use case description")
+    license_type: LicenseType = Field(..., description="Requested license type")
+    jurisdiction: str = Field(..., min_length=2, max_length=3, description="Buyer jurisdiction ISO code")
+    use_case: str = Field(default="", max_length=500, description="Intended use case description")
 
 
 class QuoteResponse(BaseModel):

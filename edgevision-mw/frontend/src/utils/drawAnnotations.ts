@@ -19,8 +19,6 @@ export interface OverlayPoint {
 /** Map pixel bbox to overlay SVG coords (1:1 in analyzed space). */
 export function bboxToOverlay(
   bbox: [number, number, number, number],
-  _videoWidth: number,
-  _videoHeight: number,
 ): { x: number; y: number; w: number; h: number } {
   const [x, y, w, h] = bbox;
   return { x, y, w, h };

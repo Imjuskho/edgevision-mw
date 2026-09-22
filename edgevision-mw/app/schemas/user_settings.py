@@ -16,6 +16,9 @@ class FeatureFlagsSchema(BaseModel):
     roadTaxonomy: bool = True
     agriTaxonomy: bool = True
     healthDashboard: bool = True
+    trajectoryPrediction: bool = True
+    anomalyDetection: bool = True
+    sceneReconstruction: bool = True
 
 
 class PersonalSettingsSchema(BaseModel):
@@ -64,6 +67,9 @@ def default_settings_for_role(role: str) -> dict[str, Any]:
             roadTaxonomy=False,
             agriTaxonomy=False,
             healthDashboard=False,
+            trajectoryPrediction=False,
+            anomalyDetection=False,
+            sceneReconstruction=False,
         ).model_dump()
         personal["showDashboardHealth"] = False
     elif role in ("ADMIN", "QA"):
@@ -89,6 +95,9 @@ def default_settings_for_role(role: str) -> dict[str, Any]:
             roadTaxonomy=False,
             agriTaxonomy=False,
             healthDashboard=False,
+            trajectoryPrediction=False,
+            anomalyDetection=False,
+            sceneReconstruction=False,
         ).model_dump()
 
     return {"personal": personal, "operational": operational}

@@ -1,4 +1,4 @@
-import { useEffect, useCallback } from "react";
+import { useEffect, useCallback, useRef } from "react";
 
 type KeyHandler = (e: KeyboardEvent) => void;
 
@@ -6,7 +6,13 @@ interface ShortcutMap {
   [key: string]: KeyHandler;
 }
 
-export function useKeyboardShortcuts(shortcuts: ShortcutMap, deps: unknown[] = []) {
+export function useKeyboardShortcuts(shortcuts: ShortcutMap) {
+  const shortcutsRef = useRef(shortcuts);
+
+  useEffect(() => {
+    shortcutsRef.current = shortcuts;
+  }, [shortcuts]);
+
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     const target = e.target as HTMLElement;
     if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT") return;
@@ -18,12 +24,12 @@ export function useKeyboardShortcuts(shortcuts: ShortcutMap, deps: unknown[] = [
       e.key.toLowerCase(),
     ].filter(Boolean).join("+");
 
-    const handler = shortcuts[key] || shortcuts[e.key.toLowerCase()];
+    const handler = shortcutsRef.current[key] || shortcutsRef.current[e.key.toLowerCase()];
     if (handler) {
       e.preventDefault();
       handler(e);
     }
-  }, deps as unknown[]);
+  }, []);
 
   useEffect(() => {
     window.addEventListener("keydown", handleKeyDown);

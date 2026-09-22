@@ -20,8 +20,6 @@ export default function RoadTaxonomyPage({ datasetId }: Props) {
   const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
-    setLoading(true);
-    setLoadError(false);
     studioApi
       .getRoadClasses()
       .then((resp) => {

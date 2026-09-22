@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -13,16 +13,19 @@ from app.schemas.compliance import (
     ConsentVerification,
     PIICheckRequest,
     PIICheckResult,
+    SubjectWithdrawalImpact,
     WithdrawConsent,
 )
 from app.services.compliance import (
     get_consent_audit,
+    get_subject_withdrawal_impact,
     record_consent,
     run_daily_audit,
     run_pii_check,
     verify_consent,
     withdraw_consent,
 )
+from app.services.idempotency import check_idempotency
 
 compliance_router = APIRouter(prefix="/consent", tags=["Compliance"])
 
@@ -47,7 +50,17 @@ async def withdraw(
     body: WithdrawConsent,
     user: dict = Depends(require_role(["ADMIN", "OPERATOR"])),
     db: AsyncSession = Depends(get_db),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ):
+    if not idempotency_key:
+        idempotency_key = f"withdraw:{body.subject_hash}:{user['sub']}"
+
+    if await check_idempotency(f"consent:{idempotency_key}"):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Duplicate request: consent withdrawal for this subject was already processed",
+        )
+
     return await withdraw_consent(db, body.subject_hash)
 
 
@@ -87,9 +100,27 @@ async def pii_audit(
     db: AsyncSession = Depends(get_db),
 ):
     from app.services.compliance import _check_pii_model
+
     if not _check_pii_model():
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="PII audit model not loaded (onnxruntime not installed)",
         )
     return await run_pii_check(db, body.dataset_id)
+
+
+@compliance_router.get(
+    "/subject/{subject_hash}/impact",
+    response_model=SubjectWithdrawalImpact,
+)
+async def subject_impact(
+    subject_hash: str,
+    user: dict = Depends(require_role(["ADMIN"])),
+    db: AsyncSession = Depends(get_db),
+):
+    affected = await get_subject_withdrawal_impact(db, subject_hash)
+    return SubjectWithdrawalImpact(
+        subject_hash=subject_hash,
+        affected_datasets=affected,
+        total_affected=len(affected),
+    )

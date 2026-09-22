@@ -28,9 +28,7 @@ async def refund_escrow(db: AsyncSession, export_id: UUID, reason: str) -> None:
     The caller must have already loaded the Export row (ideally with FOR UPDATE).
     Idempotent: calling twice for the same export is safe (no double-refund).
     """
-    result = await db.execute(
-        select(Export).where(Export.id == export_id).with_for_update()
-    )
+    result = await db.execute(select(Export).where(Export.id == export_id).with_for_update())
     export = result.scalar_one_or_none()
     if export is None:
         logger.error("refund_escrow called for non-existent export %s", export_id)
@@ -41,20 +39,20 @@ async def refund_escrow(db: AsyncSession, export_id: UUID, reason: str) -> None:
 
     # Idempotency guard: check if already refunded
     existing_refund = await db.execute(
-        select(AuditLog).where(
+        select(AuditLog)
+        .where(
             AuditLog.event_type == "EXPORT_ESCROW_REFUNDED",
             AuditLog.resource_type == "export",
             AuditLog.resource_id == export_id,
-        ).limit(1)
+        )
+        .limit(1)
     )
     if existing_refund.scalar_one_or_none() is not None:
         logger.info("refund_escrow: export %s already refunded, skipping", export_id)
         return
 
     # Lock the buyer row to prevent TOCTOU
-    user_result = await db.execute(
-        select(User).where(User.id == export.buyer_id).with_for_update()
-    )
+    user_result = await db.execute(select(User).where(User.id == export.buyer_id).with_for_update())
     user = user_result.scalar_one_or_none()
     if user is None:
         logger.error("refund_escrow: buyer %s not found for export %s", export.buyer_id, export_id)
@@ -77,7 +75,10 @@ async def refund_escrow(db: AsyncSession, export_id: UUID, reason: str) -> None:
     db.add(audit)
     logger.info(
         "Refunded $%s to buyer %s for export %s: %s",
-        export.price_usd, export.buyer_id, export_id, reason,
+        export.price_usd,
+        export.buyer_id,
+        export_id,
+        reason,
     )
 
 
@@ -96,11 +97,15 @@ async def initiate_export(db: AsyncSession, export_data: dict) -> ExportResponse
     ds_result = await db.execute(select(Dataset).where(Dataset.dataset_id == dataset_id))
     dataset = ds_result.scalar_one_or_none()
 
+    if dataset is None:
+        raise HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail="Dataset not found",
+        )
+
     # Hold payment in escrow (deduct from buyer credit)
     # FOR UPDATE locks the row to prevent concurrent double-deduction (TOCTOU)
-    user_result = await db.execute(
-        select(User).where(User.id == buyer_id).with_for_update()
-    )
+    user_result = await db.execute(select(User).where(User.id == buyer_id).with_for_update())
     user = user_result.scalar_one_or_none()
 
     price = dataset.price_usd if dataset else Decimal("0.00")
@@ -117,7 +122,7 @@ async def initiate_export(db: AsyncSession, export_data: dict) -> ExportResponse
 
     export = Export(
         id=export_id,
-        dataset_id=UUID(dataset_id) if isinstance(dataset_id, str) else dataset_id,
+        dataset_id=dataset.id,
         buyer_id=buyer_id,
         license_key=license_key,
         license_type=LicenseType(export_data.get("license_type", "ANNUAL")),
@@ -161,9 +166,7 @@ async def initiate_export(db: AsyncSession, export_data: dict) -> ExportResponse
     )
 
 
-async def verify_buyer_ready(
-    db: AsyncSession, buyer_id: UUID, dataset_id: str
-) -> tuple[bool, str]:
+async def verify_buyer_ready(db: AsyncSession, buyer_id: UUID, dataset_id: str) -> tuple[bool, str]:
     user_result = await db.execute(select(User).where(User.id == buyer_id))
     user = user_result.scalar_one_or_none()
     if user is None:
@@ -175,14 +178,12 @@ async def verify_buyer_ready(
     if user.credit_balance_usd <= 0:
         return False, "Insufficient credit balance"
 
-    ds_result = await db.execute(
-        select(Dataset).where(Dataset.dataset_id == dataset_id)
-    )
+    ds_result = await db.execute(select(Dataset).where(Dataset.dataset_id == dataset_id))
     dataset = ds_result.scalar_one_or_none()
     if dataset is None:
         return False, "Dataset not found"
 
-    ds_status = dataset.status.value if hasattr(dataset.status, 'value') else dataset.status
+    ds_status = dataset.status.value if hasattr(dataset.status, "value") else dataset.status
     if ds_status != "FOR_SALE":
         return False, f"Dataset status is {ds_status}, expected FOR_SALE"
 
@@ -192,9 +193,7 @@ async def verify_buyer_ready(
 async def confirm_delivery(db: AsyncSession, export_id: UUID) -> bool:
     from app.models.export import Export
 
-    result = await db.execute(
-        select(Export).where(Export.id == export_id).with_for_update()
-    )
+    result = await db.execute(select(Export).where(Export.id == export_id).with_for_update())
     export = result.scalar_one_or_none()
     if export is None:
         return False
@@ -202,21 +201,18 @@ async def confirm_delivery(db: AsyncSession, export_id: UUID) -> bool:
     # Only PENDING/PROCESSING exports can be confirmed as delivered
     current_status = export.status.value if hasattr(export.status, "value") else export.status
     if current_status not in ("PENDING", "PROCESSING"):
-        raise ValueError(
-            f"Cannot confirm delivery for export in {current_status} status"
-        )
+        raise ValueError(f"Cannot confirm delivery for export in {current_status} status")
 
     export.status = ExportStatus.COMPLETED
     export.completed_at = datetime.now(UTC)
     export.delivery_confirmed = True
 
     # Mark dataset as SOLD so revenue tracking works (A5)
-    ds_result = await db.execute(
-        select(Dataset).where(Dataset.id == export.dataset_id).with_for_update()
-    )
+    ds_result = await db.execute(select(Dataset).where(Dataset.id == export.dataset_id).with_for_update())
     dataset = ds_result.scalar_one_or_none()
     if dataset:
         from app.models.enums import DatasetStatus
+
         dataset.status = DatasetStatus.SOLD
         dataset.sold_at = datetime.now(UTC)
 
@@ -235,9 +231,7 @@ async def confirm_delivery(db: AsyncSession, export_id: UUID) -> bool:
     return True
 
 
-async def get_revenue_breakdown(
-    db: AsyncSession, period: str | None = None
-) -> RevenueBreakdown:
+async def get_revenue_breakdown(db: AsyncSession, period: str | None = None) -> RevenueBreakdown:
     from datetime import timedelta
 
     if period is None:

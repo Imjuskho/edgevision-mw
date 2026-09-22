@@ -1,4 +1,3 @@
-
 from datetime import UTC
 
 import minio
@@ -78,6 +77,7 @@ def require_role(roles: list[str]):
                 detail=f"Role '{user_role}' not in required roles: {roles}",
             )
         return user
+
     return role_checker
 
 
@@ -129,9 +129,8 @@ def get_minio_client_sync() -> minio.Minio:
     """
     if not minio_circuit_breaker.is_available():
         from app.core.circuit_breaker import CircuitBreakerOpenError
-        raise CircuitBreakerOpenError(
-            "MinIO circuit breaker is OPEN — too many failures"
-        )
+
+        raise CircuitBreakerOpenError("MinIO circuit breaker is OPEN — too many failures")
     global _minio_client
     if _minio_client is None:
         mc = minio.Minio(
@@ -239,11 +238,7 @@ async def get_current_buyer_or_user(
 
 async def get_current_user_ws(websocket: WebSocket) -> dict | None:
     """Authenticate a WebSocket connection via Bearer token in query params or Authorization header."""
-    token = (
-        websocket.query_params.get("token")
-        or websocket.query_params.get("studio_token")
-        or ""
-    )
+    token = websocket.query_params.get("token") or websocket.query_params.get("studio_token") or ""
     if not token:
         auth_header = websocket.headers.get("authorization", "")
         if auth_header.startswith("Bearer "):

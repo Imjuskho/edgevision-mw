@@ -51,7 +51,9 @@ class TestLiveLabelBridge:
 
 @pytest.mark.asyncio
 async def test_live_save_with_dataset_seeds_human_labels(
-    _patch_minio, test_client, db_session,
+    _patch_minio,
+    test_client,
+    db_session,
 ):
     from app.models.annotation import Annotation
     from tests.test_phase7 import _create_dataset, _create_user, _make_png_buffer
@@ -63,15 +65,17 @@ async def test_live_save_with_dataset_seeds_human_labels(
 
     token = create_access_token(data={"sub": str(admin.id), "role": admin.role})
     buf = _make_png_buffer(seed=99)
-    ann_json = json.dumps([
-        {
-            "class_name": "car",
-            "taxonomy_label": "car_private",
-            "confidence": 0.9,
-            "bbox": [50, 40, 150, 120],
-            "mask": [[0.1, 0.1], [0.4, 0.1], [0.4, 0.4]],
-        }
-    ])
+    ann_json = json.dumps(
+        [
+            {
+                "class_name": "car",
+                "taxonomy_label": "car_private",
+                "confidence": 0.9,
+                "bbox": [50, 40, 150, 120],
+                "mask": [[0.1, 0.1], [0.4, 0.1], [0.4, 0.4]],
+            }
+        ]
+    )
 
     resp = await test_client.post(
         "/api/v1/annotations/live",
@@ -96,7 +100,9 @@ async def test_live_save_with_dataset_seeds_human_labels(
 
 @pytest.mark.asyncio
 async def test_studio_save_clears_ai_draft(
-    _patch_minio, test_client, db_session,
+    _patch_minio,
+    test_client,
+    db_session,
 ):
     from datetime import datetime
 

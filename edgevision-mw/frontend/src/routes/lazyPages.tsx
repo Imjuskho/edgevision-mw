@@ -29,3 +29,7 @@ export const LazyExportPreview = lazy(() =>
     default: m.ExportPreview,
   })),
 );
+export const LazyOperatorDashboardPage = lazy(() => import("../pages/OperatorDashboardPage"));
+export const LazyBuyerDashboardPage = lazy(() => import("../pages/BuyerDashboardPage"));
+export const LazyMarketplacePage = lazy(() => import("../pages/MarketplacePage"));
+export const LazySubjectPortalPage = lazy(() => import("../pages/SubjectPortalPage"));

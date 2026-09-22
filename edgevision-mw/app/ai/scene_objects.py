@@ -4,6 +4,7 @@ COCO YOLO does not include classes like bike helmet or picture frame.
 This module adds lightweight heuristics on top of seg detections and
 edge/contour analysis for common indoor/outdoor studio objects.
 """
+
 from __future__ import annotations
 
 import cv2
@@ -14,9 +15,16 @@ from app.core.logging import get_logger
 logger = get_logger("edgevision.scene_objects")
 
 # Small accessory classes that often appear near a person's head.
-_HEADWEAR_PROXIES = frozenset({
-    "sports ball", "frisbee", "umbrella", "handbag", "backpack", "tie",
-})
+_HEADWEAR_PROXIES = frozenset(
+    {
+        "sports ball",
+        "frisbee",
+        "umbrella",
+        "handbag",
+        "backpack",
+        "tie",
+    }
+)
 
 
 def _box_iou(a: tuple[float, float, float, float], b: tuple[float, float, float, float]) -> float:
@@ -98,16 +106,18 @@ def detect_headwear(
         used_tracks.add(track_id)
 
         ibox = _xywh_to_xyxy(best["bbox"], img_w, img_h)
-        extras.append({
-            "class_name": "helmet",
-            "taxonomy_label": "helmet",
-            "confidence": round(min(0.92, float(best.get("confidence", 0.5)) + 0.15), 4),
-            "bbox": [ibox[0], ibox[1], ibox[2] - ibox[0], ibox[3] - ibox[1]],
-            "track_id": f"helmet_{track_id}",
-            "mask_format": best.get("mask_format"),
-            "mask": best.get("mask"),
-            "source": "headwear_heuristic",
-        })
+        extras.append(
+            {
+                "class_name": "helmet",
+                "taxonomy_label": "helmet",
+                "confidence": round(min(0.92, float(best.get("confidence", 0.5)) + 0.15), 4),
+                "bbox": [ibox[0], ibox[1], ibox[2] - ibox[0], ibox[3] - ibox[1]],
+                "track_id": f"helmet_{track_id}",
+                "mask_format": best.get("mask_format"),
+                "mask": best.get("mask"),
+                "source": "headwear_heuristic",
+            }
+        )
 
     return extras
 
@@ -152,15 +162,17 @@ def detect_picture_frames(image: np.ndarray, max_frames: int = 4) -> list[dict]:
     candidates.sort(key=lambda c: c[0], reverse=True)
     results: list[dict] = []
     for score, box in candidates[:max_frames]:
-        results.append({
-            "class_name": "picture frame",
-            "taxonomy_label": "picture_frame",
-            "confidence": round(0.35 + score * 0.45, 4),
-            "bbox": box,
-            "track_id": f"frame_{len(results)}",
-            "mask_format": None,
-            "source": "contour_heuristic",
-        })
+        results.append(
+            {
+                "class_name": "picture frame",
+                "taxonomy_label": "picture_frame",
+                "confidence": round(0.35 + score * 0.45, 4),
+                "bbox": box,
+                "track_id": f"frame_{len(results)}",
+                "mask_format": None,
+                "source": "contour_heuristic",
+            }
+        )
     return results
 
 
@@ -176,10 +188,7 @@ def enrich_live_detections(
     headwear = detect_headwear(tracked, seg_instances, w, h)
     frames = detect_picture_frames(image)
 
-    existing_boxes = [
-        _xywh_to_xyxy(t["bbox"], w, h) if len(t.get("bbox", [])) == 4 else (0, 0, 0, 0)
-        for t in merged
-    ]
+    existing_boxes = [_xywh_to_xyxy(t["bbox"], w, h) if len(t.get("bbox", [])) == 4 else (0, 0, 0, 0) for t in merged]
 
     for extra in headwear + frames:
         ebox = _xywh_to_xyxy(extra["bbox"], w, h)

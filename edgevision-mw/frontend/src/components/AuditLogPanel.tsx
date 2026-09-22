@@ -52,8 +52,26 @@ export function AuditLogPanel() {
   }, [eventFilter, offset, t]);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    const run = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const resp = await studioApi.listAuditLogs({
+          event_type: eventFilter || undefined,
+          limit,
+          offset,
+        });
+        setItems(resp.data.items ?? []);
+        setTotal(resp.data.total ?? 0);
+      } catch {
+        setError(t("audit.loadFailed", "Could not load audit log."));
+        setItems([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+    void run();
+  }, [eventFilter, offset, t]);
 
   return (
     <section className="settings-panel audit-log-panel">

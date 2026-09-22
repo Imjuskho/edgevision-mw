@@ -51,6 +51,8 @@ class LicenseType(enum.StrEnum):
     PERPETUAL = "PERPETUAL"
     ANNUAL = "ANNUAL"
     EXCLUSIVE = "EXCLUSIVE"
+    ONE_TIME = "ONE_TIME"
+    COMMISSIONED = "COMMISSIONED"
 
 
 class ExportStatus(enum.StrEnum):

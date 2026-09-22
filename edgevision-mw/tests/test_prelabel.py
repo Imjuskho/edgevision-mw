@@ -1,4 +1,5 @@
 """Tests for Phase 8.2 — server-side pre-labeling."""
+
 from __future__ import annotations
 
 import io
@@ -187,7 +188,9 @@ class TestPrelabelAPI:
             assert "count" in data
 
     @pytest.mark.asyncio
-    async def test_prelabel_existing_image_creates_annotation(self, test_client, db_session, mock_minio, jwt_token_factory):
+    async def test_prelabel_existing_image_creates_annotation(
+        self, test_client, db_session, mock_minio, jwt_token_factory
+    ):
         import hashlib
         from uuid import uuid4
 
@@ -261,5 +264,8 @@ class TestPrelabelAPI:
 
         # Verify an Annotation was created
         from sqlalchemy import select
-        ann = (await db_session.execute(select(Annotation).where(Annotation.image_path == image_record.storage_key))).scalar_one_or_none()
+
+        ann = (
+            await db_session.execute(select(Annotation).where(Annotation.image_path == image_record.storage_key))
+        ).scalar_one_or_none()
         assert ann is not None

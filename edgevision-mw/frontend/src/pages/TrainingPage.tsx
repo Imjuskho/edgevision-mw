@@ -85,13 +85,30 @@ export default function TrainingPage({ datasetId }: { datasetId: string }) {
   }, []);
 
   useEffect(() => {
-    fetchJobs();
-    fetchModels();
-    pollRef.current = setInterval(fetchJobs, 5000);
+    const load = async () => {
+      try {
+        const [jobsRes, modelsRes] = await Promise.all([
+          studioApi.listTrainingJobs({ page_size: 50 }),
+          studioApi.listDeployedModels({ page_size: 50 }),
+        ]);
+        setJobs(jobsRes.data.items ?? []);
+        setJobsError(false);
+        setModels(modelsRes.data.items ?? []);
+        setModelsError(false);
+      } catch {
+        setJobsError(true);
+        setModelsError(true);
+      } finally {
+        setLoading(false);
+        setModelsLoading(false);
+      }
+    };
+    void load();
+    pollRef.current = setInterval(() => void fetchJobs(), 5000);
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
     };
-  }, [fetchJobs, fetchModels]);
+  }, [fetchJobs]);
 
   const handleStartTraining = useCallback(async () => {
     if (!datasetId) {

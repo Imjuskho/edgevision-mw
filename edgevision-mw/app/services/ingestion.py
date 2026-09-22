@@ -23,21 +23,17 @@ logger = get_logger("edgevision.ingestion")
 MAX_BATCH_FILE_SIZE_BYTES = 500 * 1024 * 1024  # 500 MB
 
 
-async def receive_batch(
-    db: AsyncSession, batch_data: dict, file: bytes | None = None
-) -> BatchResponse:
+async def receive_batch(db: AsyncSession, batch_data: dict, file: bytes | None = None) -> BatchResponse:
     batch_id = batch_data["batch_id"]
 
     # Idempotency: if batch_id already exists, return existing record
-    existing = await db.execute(
-        select(IngestionBatch).where(IngestionBatch.batch_id == batch_id)
-    )
+    existing = await db.execute(select(IngestionBatch).where(IngestionBatch.batch_id == batch_id))
     existing_batch = existing.scalar_one_or_none()
     if existing_batch is not None:
         return BatchResponse(
             id=existing_batch.id,
             batch_id=existing_batch.batch_id,
-            status=existing_batch.status.value if hasattr(existing_batch.status, 'value') else existing_batch.status,
+            status=existing_batch.status.value if hasattr(existing_batch.status, "value") else existing_batch.status,
             ingested_at=existing_batch.ingested_at,
             storage_path=existing_batch.storage_path,
             event_count=existing_batch.event_count,
@@ -47,7 +43,8 @@ async def receive_batch(
     file_size = batch_data.get("file_size_bytes", 0)
     if file_size > MAX_BATCH_FILE_SIZE_BYTES:
         batch = IngestionBatch(
-            id=uuid4(), batch_id=batch_id,
+            id=uuid4(),
+            batch_id=batch_id,
             node_id=batch_data["node_id"],
             hub_id=batch_data.get("hub_id", "default-hub"),
             event_count=batch_data.get("event_count", 0),
@@ -61,11 +58,14 @@ async def receive_batch(
         db.add(batch)
         await db.commit()
         await db.refresh(batch)
-        status_val = batch.status.value if hasattr(batch.status, 'value') else batch.status
+        status_val = batch.status.value if hasattr(batch.status, "value") else batch.status
         return BatchResponse(
-            id=batch.id, batch_id=batch.batch_id,
-            status=status_val, ingested_at=batch.ingested_at,
-            storage_path=batch.storage_path, event_count=batch.event_count,
+            id=batch.id,
+            batch_id=batch.batch_id,
+            status=status_val,
+            ingested_at=batch.ingested_at,
+            storage_path=batch.storage_path,
+            event_count=batch.event_count,
         )
 
     # Checksum verification: if file bytes provided, verify SHA-256
@@ -74,7 +74,8 @@ async def receive_batch(
         expected_hash = batch_data.get("checksum_sha256", "")
         if actual_hash != expected_hash:
             batch = IngestionBatch(
-                id=uuid4(), batch_id=batch_id,
+                id=uuid4(),
+                batch_id=batch_id,
                 node_id=batch_data["node_id"],
                 hub_id=batch_data.get("hub_id", "default-hub"),
                 event_count=batch_data.get("event_count", 0),
@@ -88,11 +89,14 @@ async def receive_batch(
             db.add(batch)
             await db.commit()
             await db.refresh(batch)
-            status_val = batch.status.value if hasattr(batch.status, 'value') else batch.status
+            status_val = batch.status.value if hasattr(batch.status, "value") else batch.status
             return BatchResponse(
-                id=batch.id, batch_id=batch.batch_id,
-                status=status_val, ingested_at=batch.ingested_at,
-                storage_path=batch.storage_path, event_count=batch.event_count,
+                id=batch.id,
+                batch_id=batch.batch_id,
+                status=status_val,
+                ingested_at=batch.ingested_at,
+                storage_path=batch.storage_path,
+                event_count=batch.event_count,
             )
 
     batch = IngestionBatch(
@@ -103,7 +107,9 @@ async def receive_batch(
         event_count=batch_data["event_count"],
         file_size_bytes=file_size,
         checksum_sha256=batch_data["checksum_sha256"],
-        node_signature=base64.b64decode(batch_data.get("node_signature", "")) if batch_data.get("node_signature") else b"",
+        node_signature=base64.b64decode(batch_data.get("node_signature", ""))
+        if batch_data.get("node_signature")
+        else b"",
         compression_codec=batch_data.get("compression_codec", "h265"),
         status=BatchStatus.PENDING,
         quality_scores=batch_data.get("quality_scores", {}),
@@ -117,6 +123,7 @@ async def receive_batch(
         storage_path = f"raw/{batch.node_id}/{batch.batch_id}"
         try:
             from app.core.dependencies import get_minio_client
+
             minio_client = await get_minio_client()
             minio_client.put_object(
                 settings.MINIO_BUCKET,
@@ -133,6 +140,7 @@ async def receive_batch(
     # HTTP response to the node — but it must be visible for ops alerting.
     try:
         from app.workers.tasks import auto_label_task
+
         auto_label_task.delay(str(batch.id))
     except Exception as exc:
         logger.error(
@@ -142,40 +150,42 @@ async def receive_batch(
             error=str(exc),
         )
         from app.models.audit import AuditLog
-        db.add(AuditLog(
-            event_type="BATCH_DISPATCH_FAILED",
-            severity="ERROR",
-            resource_type="ingestion_batch",
-            resource_id=batch.id,
-            details={
-                "batch_id": batch_id,
-                "node_id": batch_data["node_id"],
-                "error": str(exc),
-            },
-            actor_type="SYSTEM",
-        ))
+
+        db.add(
+            AuditLog(
+                event_type="BATCH_DISPATCH_FAILED",
+                severity="ERROR",
+                resource_type="ingestion_batch",
+                resource_id=batch.id,
+                details={
+                    "batch_id": batch_id,
+                    "node_id": batch_data["node_id"],
+                    "error": str(exc),
+                },
+                actor_type="SYSTEM",
+            )
+        )
         await db.commit()
 
     return BatchResponse(
         id=batch.id,
         batch_id=batch.batch_id,
-        status=batch.status.value if hasattr(batch.status, 'value') else batch.status,
+        status=batch.status.value if hasattr(batch.status, "value") else batch.status,
         ingested_at=batch.ingested_at,
         storage_path=batch.storage_path,
         event_count=batch.event_count,
     )
 
 
-async def validate_batch(
-    db: AsyncSession, batch_data: dict, signature: str
-) -> ValidationResult:
+async def validate_batch(db: AsyncSession, batch_data: dict, signature: str) -> ValidationResult:
     errors: list[str] = []
     warnings: list[str] = []
 
     # 1. Verify checksum format
     import re
+
     checksum = batch_data.get("checksum_sha256", "")
-    if not re.match(r'^[0-9a-fA-F]{64}$', checksum):
+    if not re.match(r"^[0-9a-fA-F]{64}$", checksum):
         errors.append("Invalid checksum format: must be 64-character hex string")
 
     # 2. Verify signature
@@ -220,19 +230,13 @@ async def validate_batch(
 
 async def get_queue_stats(db: AsyncSession) -> IngestionQueue:
     pending = await db.execute(
-        select(func.count()).select_from(IngestionBatch).where(
-            IngestionBatch.status == BatchStatus.PENDING
-        )
+        select(func.count()).select_from(IngestionBatch).where(IngestionBatch.status == BatchStatus.PENDING)
     )
     processing = await db.execute(
-        select(func.count()).select_from(IngestionBatch).where(
-            IngestionBatch.status == BatchStatus.VALIDATING
-        )
+        select(func.count()).select_from(IngestionBatch).where(IngestionBatch.status == BatchStatus.VALIDATING)
     )
     completed = await db.execute(
-        select(func.count()).select_from(IngestionBatch).where(
-            IngestionBatch.status == BatchStatus.INGESTED
-        )
+        select(func.count()).select_from(IngestionBatch).where(IngestionBatch.status == BatchStatus.INGESTED)
     )
 
     oldest_result = await db.execute(
@@ -253,9 +257,7 @@ async def get_queue_stats(db: AsyncSession) -> IngestionQueue:
 
 
 async def process_batch(db: AsyncSession, batch_id: str) -> bool:
-    result = await db.execute(
-        select(IngestionBatch).where(IngestionBatch.batch_id == batch_id).with_for_update()
-    )
+    result = await db.execute(select(IngestionBatch).where(IngestionBatch.batch_id == batch_id).with_for_update())
     batch = result.scalar_one_or_none()
     if batch is None:
         return False
@@ -307,9 +309,7 @@ async def get_batches(
 
 
 async def get_batch_detail(db: AsyncSession, batch_id: str) -> dict | None:
-    result = await db.execute(
-        select(IngestionBatch).where(IngestionBatch.batch_id == batch_id)
-    )
+    result = await db.execute(select(IngestionBatch).where(IngestionBatch.batch_id == batch_id))
     batch = result.scalar_one_or_none()
     if batch is None:
         return None

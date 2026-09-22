@@ -1,4 +1,5 @@
 """Helpers for JSON/JSONB-safe Python values (e.g. before PostgreSQL writes)."""
+
 from __future__ import annotations
 
 from typing import Any

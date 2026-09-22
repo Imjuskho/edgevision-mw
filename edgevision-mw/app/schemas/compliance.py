@@ -18,10 +18,10 @@ class ConsentRecord(BaseModel):
     guardian_hash: str | None = Field(default=None, description="Guardian hash for minors")
     signature_bytes: str = Field(..., description="Base64-encoded consent signature")
 
-    @model_validator(mode='after')
+    @model_validator(mode="after")
     def validate_expiry_after_signing(self):
         if self.expiry <= self.signed_at:
-            raise ValueError('expiry must be after signed_at')
+            raise ValueError("expiry must be after signed_at")
         return self
 
 
@@ -98,3 +98,20 @@ class PIICheckResult(BaseModel):
     pii_detected: int = Field(..., description="Samples with PII detected")
     detected_types: dict[str, int] = Field(default_factory=dict, description="PII type counts")
     passed: bool = Field(..., description="Whether the check passed")
+
+
+class AffectedDataset(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    dataset_id: str = Field(..., description="Affected dataset identifier")
+    dataset_name: str = Field(..., description="Dataset name")
+    status: str = Field(..., description="Current dataset status")
+    subject_annotation_count: int = Field(..., description="Number of annotations for this subject in the dataset")
+
+
+class SubjectWithdrawalImpact(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    subject_hash: str = Field(..., description="Subject hash queried")
+    affected_datasets: list[AffectedDataset] = Field(default_factory=list, description="Datasets containing this subject")
+    total_affected: int = Field(..., description="Total number of affected datasets")

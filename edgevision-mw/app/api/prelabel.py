@@ -2,6 +2,7 @@
 
 Provides server-side YOLO-based auto-labeling for uploaded images.
 """
+
 from __future__ import annotations
 
 from typing import Literal
@@ -138,7 +139,9 @@ async def prelabel_existing_image(
     # find next image_index for dataset
     from sqlalchemy import func, select
 
-    max_idx = (await db.execute(select(func.max(Annotation.image_index)).where(Annotation.dataset_id == ds.id))).scalar()
+    max_idx = (
+        await db.execute(select(func.max(Annotation.image_index)).where(Annotation.dataset_id == ds.id))
+    ).scalar()
     next_index = (max_idx if max_idx is not None else -1) + 1
 
     detected_objects = {"objects": detections, "_checksum": record.checksum_sha256 or ""}

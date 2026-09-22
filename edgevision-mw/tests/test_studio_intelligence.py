@@ -25,6 +25,7 @@ from app.models.studio import (
     DuplicateGroup,
     ExportJob,
 )
+from tests.conftest import _create_node
 
 # ─── Test data factories (reuse pattern from test_studio.py) ───
 
@@ -43,30 +44,6 @@ async def _create_user(db, role="ANNOTATOR"):
     db.add(user)
     await db.commit()
     return user
-
-
-async def _create_node(db):
-    node = Node(
-        id=uuid4(),
-        node_id=f"PH3-{uuid4().hex[:8]}",
-        district="Lilongwe",
-        latitude=-13.9626,
-        longitude=33.7741,
-        category=NodeCategory.ROAD,
-        hardware_profile={"gpu": "jetson"},
-        network_config={"apn": "airtel"},
-        capture_schedule="*/10 * * * *",
-        interest_classes=["vehicle", "pedestrian"],
-        pii_mode=PIIMode.STRICT,
-        firmware_version="1.0.0",
-        public_key=b"\x01" * 32,
-        status=NodeStatus.ONLINE,
-        is_enabled=True,
-    )
-    db.add(node)
-    await db.commit()
-    await db.refresh(node)
-    return node
 
 
 async def _create_batch(db, node):
@@ -172,9 +149,14 @@ async def test_health_score_with_annotations(db_session, test_client):
     classes = ["vehicle", "vehicle", "pedestrian", "pedestrian", "bicycle"]
     for i, cls in enumerate(classes):
         await _create_annotation(
-            db_session, ds.id, batch.id,
-            index=i, class_name=cls, quality=0.8 + i * 0.02,
-            lat=-13.96 + i * 0.001, lon=33.77 + i * 0.001,
+            db_session,
+            ds.id,
+            batch.id,
+            index=i,
+            class_name=cls,
+            quality=0.8 + i * 0.02,
+            lat=-13.96 + i * 0.001,
+            lon=33.77 + i * 0.001,
         )
 
     token = _make_token(user)

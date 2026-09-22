@@ -26,20 +26,14 @@ class SyncAction(BaseModel):
         description="Action type",
     )
     payload: dict | None = Field(default=None, description="Action payload")
-    client_timestamp: str | None = Field(
-        default=None, description="Client ISO timestamp for ordering"
-    )
-    etag: str | None = Field(
-        default=None, description="ETag from last known server version"
-    )
+    client_timestamp: str | None = Field(default=None, description="Client ISO timestamp for ordering")
+    etag: str | None = Field(default=None, description="ETag from last known server version")
 
 
 class SyncBatchRequest(BaseModel):
     session_id: UUID = Field(..., description="Annotation session ID")
     actions: list[SyncAction] = Field(..., description="Batch of actions")
-    client_version: str | None = Field(
-        default=None, description="Client app version"
-    )
+    client_version: str | None = Field(default=None, description="Client app version")
 
 
 class SyncConflict(BaseModel):
@@ -80,9 +74,7 @@ async def sync_batch(
     session = (await db.execute(stmt)).scalar_one_or_none()
 
     if not session:
-        raise HTTPException(
-            status_code=404, detail="Session not found or not owned by user"
-        )
+        raise HTTPException(status_code=404, detail="Session not found or not owned by user")
 
     committed: list[UUID] = []
     conflicts: list[SyncConflict] = []
@@ -93,17 +85,13 @@ async def sync_batch(
         annotation = (await db.execute(ann_stmt)).scalar_one_or_none()
 
         if not annotation:
-            rejected.append(
-                {"annotation_id": str(action.annotation_id), "reason": "Not found"}
-            )
+            rejected.append({"annotation_id": str(action.annotation_id), "reason": "Not found"})
             continue
 
         try:
             if action.action_type == "edit":
                 if action.etag and annotation.updated_at:
-                    server_etag = hashlib.md5(
-                        annotation.updated_at.isoformat().encode()
-                    ).hexdigest()
+                    server_etag = hashlib.md5(annotation.updated_at.isoformat().encode()).hexdigest()
                     if server_etag != action.etag:
                         conflicts.append(
                             SyncConflict(
@@ -208,9 +196,7 @@ async def sync_batch(
                     )
 
         except Exception as exc:
-            rejected.append(
-                {"annotation_id": str(action.annotation_id), "reason": str(exc)}
-            )
+            rejected.append({"annotation_id": str(action.annotation_id), "reason": str(exc)})
 
     session.annotations_created += len(committed)
     await db.commit()
@@ -226,9 +212,7 @@ async def sync_batch(
 @router.get("/sync/status")
 async def sync_status(
     session_id: UUID,
-    since: str | None = Query(
-        default=None, description="ISO timestamp to check changes since"
-    ),
+    since: str | None = Query(default=None, description="ISO timestamp to check changes since"),
     user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -273,9 +257,7 @@ async def sync_status(
                 "image_index": a.image_index,
                 "status": a.status.value if hasattr(a.status, "value") else str(a.status),
                 "updated_at": a.updated_at.isoformat() if a.updated_at else None,
-                "etag": hashlib.md5(
-                    a.updated_at.isoformat().encode()
-                ).hexdigest() if a.updated_at else None,
+                "etag": hashlib.md5(a.updated_at.isoformat().encode()).hexdigest() if a.updated_at else None,
             }
             for a in recent_changes
         ],

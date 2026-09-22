@@ -174,25 +174,31 @@ export function StudioSettingsProvider({ children }: { children: ReactNode }) {
     }
     return loaded;
   });
-  const [resolvedTheme, setResolvedTheme] = useState<StudioTheme>(() =>
-    resolveTheme(loadLocalSettings().personal.theme),
-  );
   const [syncStatus, setSyncStatus] = useState<"idle" | "syncing" | "error" | "offline">("idle");
   const syncTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingPatch = useRef<Partial<{ personal: PersonalSettings; operational: OperationalSettings }>>({});
+  const [systemPrefersLight, setSystemPrefersLight] = useState(() =>
+    window.matchMedia("(prefers-color-scheme: light)").matches,
+  );
+
+  const resolvedTheme: StudioTheme =
+    settings.personal.theme === "system"
+      ? systemPrefersLight
+        ? "light"
+        : "dark"
+      : settings.personal.theme;
 
   useEffect(() => {
     applyDomEffects(settings);
     persistLocal(settings);
-    setResolvedTheme(resolveTheme(settings.personal.theme));
   }, [settings]);
 
   useEffect(() => {
     if (settings.personal.theme !== "system") return;
     const mq = window.matchMedia("(prefers-color-scheme: light)");
-    const onChange = () => {
-      applyDomEffects(settings);
-      setResolvedTheme(resolveTheme("system"));
+    const onChange = (e: MediaQueryListEvent) => {
+      setSystemPrefersLight(e.matches);
+      document.documentElement.setAttribute("data-theme", e.matches ? "light" : "dark");
     };
     mq.addEventListener("change", onChange);
     return () => mq.removeEventListener("change", onChange);

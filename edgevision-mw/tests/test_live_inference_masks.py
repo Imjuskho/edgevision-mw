@@ -68,6 +68,9 @@ class TestLiveInferenceMasks:
         ]
         anns = build_annotations(tracked)
         assert anns[0]["mask_format"] == "polygon"
+        assert anns[0]["confidence"] == 0.91
+        assert anns[0]["raw_confidence"] == 0.91
+        assert anns[0]["alert_active"] is False
         assert len(anns[0]["mask"]) == 3
         assert anns[0]["bbox_3d"]["depth_available"] is True
         assert len(anns[0]["bbox_3d"]["corners"]) == 8
@@ -88,3 +91,22 @@ class TestLiveInferenceMasks:
         anns = build_annotations(enriched)
         assert anns[0].get("bbox_3d") is not None
         assert len(anns[0]["bbox_3d"]["corners"]) == 8
+
+    def test_seg_pipeline_attaches_metric_distance(self):
+        from app.ai.live_inference import attach_depth_boxes, build_annotations
+
+        tracked = [
+            {
+                "track_id": 3,
+                "bbox": [100.0, 80.0, 260.0, 220.0],
+                "class_name": "person",
+                "confidence": 0.9,
+            }
+        ]
+        image = np.zeros((384, 512, 3), dtype=np.uint8)
+        enriched = attach_depth_boxes(tracked, image, depth_map=None, depth_available=False)
+        anns = build_annotations(enriched)
+        assert anns[0]["distance_m"] is not None
+        assert anns[0]["distance_quality"] == "metric_ground_plane"
+        assert anns[0]["distance_m"] > 0
+        assert anns[0]["bbox_3d"]["distance_quality"] == "metric_ground_plane"

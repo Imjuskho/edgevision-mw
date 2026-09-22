@@ -182,13 +182,9 @@ async def test_upload_video_all_frames_listed(db_session, test_client: AsyncClie
     assert uploaded_count >= 2, data
 
     image_count = (
-        await db_session.execute(
-            select(func.count()).select_from(ImageRecord).where(ImageRecord.dataset_id == ds.id)
-        )
+        await db_session.execute(select(func.count()).select_from(ImageRecord).where(ImageRecord.dataset_id == ds.id))
     ).scalar()
-    ann_count = (
-        await db_session.execute(select(func.count()).where(Annotation.dataset_id == ds.id))
-    ).scalar()
+    ann_count = (await db_session.execute(select(func.count()).where(Annotation.dataset_id == ds.id))).scalar()
 
     assert image_count == uploaded_count
     assert ann_count == uploaded_count

@@ -142,7 +142,7 @@ export function useTouchCanvas(canvasRef: React.RefObject<Canvas | null>) {
     const el = canvasRef.current?.upperCanvasEl;
     if (!el) return;
 
-    el.style.touchAction = 'none'; // Disable default browser touch actions
+    el.style.setProperty('touch-action', 'none'); // Disable default browser touch actions
 
     el.addEventListener('pointerdown', handlePointerDown);
     el.addEventListener('pointermove', handlePointerMove);

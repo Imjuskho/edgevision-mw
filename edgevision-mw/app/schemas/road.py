@@ -112,7 +112,9 @@ class SignDetectionResult(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     bbox: list[int] = Field(..., min_length=4, max_length=4, description="Pixel bbox [x1, y1, x2, y2]")
-    color_class: str = Field(..., description="Sign color class (red_sign, blue_sign, green_sign, yellow_sign, white_sign)")
+    color_class: str = Field(
+        ..., description="Sign color class (red_sign, blue_sign, green_sign, yellow_sign, white_sign)"
+    )
     confidence: float = Field(..., ge=0.0, le=1.0, description="Detection confidence")
     ocr_text: str = Field(default="", description="OCR-extracted text from sign")
     ocr_confidence: float = Field(default=0.0, ge=0.0, le=1.0, description="OCR confidence")
@@ -158,3 +160,59 @@ class TrackingResponse(BaseModel):
 class RoadAnalyzeRequest(BaseModel):
     dataset_id: UUID = Field(..., description="Dataset ID to analyze")
     conf_threshold: float = Field(default=0.5, ge=0.0, le=1.0)
+
+
+class RoadSceneRequest(RoadSegmentationRequest):
+    camera_height_m: float = Field(default=1.5, gt=0.0, description="Camera mounting height above ground (meters)")
+    focal_length_px: float = Field(default=700.0, gt=0.0, description="Vertical focal length (pixels)")
+    horizon_fraction: float = Field(
+        default=0.35, gt=0.0, lt=1.0, description="Horizon row as a fraction of image height"
+    )
+
+
+class RoadSceneHazard(BaseModel):
+    class_id: int = Field(..., ge=0, description="Hazard class ID (pothole=1, crack=2)")
+    class_name: str = Field(..., min_length=1, description="Hazard class name")
+    confidence: float = Field(..., ge=0.0, le=1.0, description="Detection confidence")
+    bbox: list[float] = Field(..., min_length=4, max_length=4, description="Normalized bbox [x, y, w, h]")
+    contact_row: int = Field(..., ge=0, description="Bottom (contact) row of the hazard in pixels")
+    distance_m: float | None = Field(default=None, description="Metric distance to hazard (meters)")
+    distance_quality: str = Field(default="unavailable", description="Distance estimation quality tag")
+    mask_quality: str = Field(default="none", description="Mask source for the hazard (rle/bbox_fill)")
+
+
+class RoadSidewalkRegion(BaseModel):
+    side: str = Field(..., description="Side of the frame (left/right)")
+    coverage: float = Field(..., ge=0.0, le=1.0, description="Non-drivable coverage of the band")
+    method: str = Field(default="geometric_boundary", description="Detection method")
+
+
+class RoadScene(BaseModel):
+    has_road: bool = Field(..., description="Whether a drivable surface was detected")
+    drivable_ratio: float = Field(..., ge=0.0, le=1.0, description="Drivable pixel share of the lower frame")
+    drivable_class_ids: list[int] = Field(default_factory=list, description="Drivable road surface class IDs")
+    hazards: list[RoadSceneHazard] = Field(default_factory=list, description="Non-drivable hazards")
+    sidewalk_present: bool = Field(default=False, description="Sidewalk detected via geometric heuristics")
+    sidewalk_regions: list[RoadSidewalkRegion] = Field(default_factory=list, description="Sidewalk bands")
+    curb_present: bool = Field(default=False, description="Curb detected via geometric heuristics")
+    curb_method: str = Field(default="not_detected", description="Curb detection method")
+    road_continuous_fraction: float = Field(
+        default=0.0, ge=0.0, le=1.0, description="Share of center columns where the road reaches the frame bottom"
+    )
+    road_edge_distance_m: float | None = Field(
+        default=None, description="Forward free-space to the road edge (meters)"
+    )
+    road_edge_quality: str = Field(default="no_drivable_region", description="Road-edge distance quality tag")
+    mask_quality: str = Field(default="none", description="Best available mask source (rle/bbox_fill/none)")
+    method: str = Field(default="instance_fusion", description="Analysis method")
+
+
+class RoadSceneResponse(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
+
+    image_id: UUID = Field(..., description="Processed image ID")
+    scene: RoadScene = Field(..., description="Semantic road scene analysis")
+    surface_type: str = Field(..., description="Overall surface classification (paved/unpaved/mixed)")
+    depth_quality: str = Field(..., description="Metric depth quality tag")
+    model_version: str = Field(..., description="Model version used")
+    latency_ms: float = Field(..., description="Total processing time in milliseconds")

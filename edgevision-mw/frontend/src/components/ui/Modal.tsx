@@ -15,17 +15,15 @@ export interface ModalProps {
 
 export function Modal({ open, onClose, title, children, footer, size = "md", "aria-describedby": describedBy }: ModalProps) {
   const panelRef = useRef<HTMLDivElement>(null);
-  const onCloseRef = useRef(onClose);
-  onCloseRef.current = onClose;
 
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onCloseRef.current();
+      if (e.key === "Escape") onClose();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [open]);
+  }, [open, onClose]);
 
   useEffect(() => {
     if (open) {

@@ -11,16 +11,24 @@ from app.services.catalog import generate_quote, search_datasets, trigger_build
 
 async def _create_ready_dataset(db):
     ds = Dataset(
-        id=uuid4(), dataset_id=f"DS-{uuid4().hex[:6]}",
-        name="Test Dataset", version="1.0",
-        status=DatasetStatus.READY, sample_count=100,
+        id=uuid4(),
+        dataset_id=f"DS-{uuid4().hex[:6]}",
+        name="Test Dataset",
+        version="1.0",
+        status=DatasetStatus.READY,
+        sample_count=100,
         classes={"vehicle": 1, "pedestrian": 2},
-        annotations_per_image=3.5, image_width=1920, image_height=1080,
+        annotations_per_image=3.5,
+        image_width=1920,
+        image_height=1080,
         geographic_coverage={"districts": ["Lilongwe"]},
         demographic_report={"age_groups": {}},
-        consent_coverage_pct=0.95, pii_scrub_verified=True,
-        iaa_score=0.85, formats=["COCO", "YOLO"],
-        price_usd=Decimal("500.00"), license_type=LicenseType.ANNUAL,
+        consent_coverage_pct=0.95,
+        pii_scrub_verified=True,
+        iaa_score=0.85,
+        formats=["COCO", "YOLO"],
+        price_usd=Decimal("500.00"),
+        license_type=LicenseType.ANNUAL,
     )
     db.add(ds)
     await db.commit()
@@ -159,9 +167,7 @@ async def test_manifest_handles_flat_objects_list(db_session):
         image_index=0,
         image_path="datasets/test/images/live.jpg",
         thumbnail_path="datasets/test/thumbs/live.jpg",
-        detected_objects=[
-            {"class_name": "vehicle", "bbox": [1, 2, 30, 40], "confidence": 0.8}
-        ],
+        detected_objects=[{"class_name": "vehicle", "bbox": [1, 2, 30, 40], "confidence": 0.8}],
         auto_labels={},
         status=AnnotationStatus.PENDING,
         quality_score=0.0,
@@ -176,8 +182,6 @@ async def test_manifest_handles_flat_objects_list(db_session):
     assert len(manifest.images) == 1
     assert len(manifest.annotations) == 1
     assert manifest.annotations[0]["bbox"] == [1.0, 2.0, 30.0, 40.0]
-
-
 
     from unittest.mock import patch
 
@@ -203,7 +207,7 @@ async def test_list_datasets_filters(db_session):
         await _create_ready_dataset(db_session)
 
     result1 = await search_datasets(db_session, filters={})
-    assert hasattr(result1, 'items') or isinstance(result1, (list, object))
+    assert hasattr(result1, "items") or isinstance(result1, (list, object))
 
     count_result = await db_session.execute(select(Dataset))
     all_ds = count_result.scalars().all()
@@ -214,6 +218,7 @@ async def test_list_datasets_filters(db_session):
 async def test_get_quote_pricing(db_session):
     ds = await _create_ready_dataset(db_session)
     from app.services.catalog import publish_dataset
+
     await publish_dataset(db_session, ds.dataset_id)
 
     quote_data = {
@@ -235,11 +240,14 @@ async def test_generate_quote_rejects_ready_dataset(db_session):
     assert ds.status == DatasetStatus.READY
 
     with pytest.raises(ValueError, match="expected FOR_SALE"):
-        await generate_quote(db_session, quote_request={
-            "dataset_id": ds.dataset_id,
-            "license_type": "ANNUAL",
-            "jurisdiction": "MW",
-        })
+        await generate_quote(
+            db_session,
+            quote_request={
+                "dataset_id": ds.dataset_id,
+                "license_type": "ANNUAL",
+                "jurisdiction": "MW",
+            },
+        )
 
 
 @pytest.mark.asyncio

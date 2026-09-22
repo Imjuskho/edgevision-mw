@@ -18,16 +18,11 @@ interface AuthContextType extends AuthState {
 const AuthContext = createContext<AuthContextType | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<AuthState>({
-    token: null,
-    user: null,
-    isAuthenticated: false,
-  });
-
-  useEffect(() => {
+  const [state, setState] = useState<AuthState>(() => {
     const saved = localStorage.getItem("studio_token");
-    if (!saved) return;
-
+    if (!saved) {
+      return { token: null, user: null, isAuthenticated: false };
+    }
     const tokenParts = saved.split(".");
     if (tokenParts.length === 3) {
       try {
@@ -35,28 +30,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const now = Math.floor(Date.now() / 1000);
         if (payload.exp && payload.exp < now) {
           localStorage.removeItem("studio_token");
-          setState({ token: null, user: null, isAuthenticated: false });
-          return;
+          return { token: null, user: null, isAuthenticated: false };
         }
       } catch {
         localStorage.removeItem("studio_token");
-        setState({ token: null, user: null, isAuthenticated: false });
-        return;
+        return { token: null, user: null, isAuthenticated: false };
       }
     }
+    return { token: saved, user: null, isAuthenticated: true };
+  });
 
-    setState({ token: saved, user: null, isAuthenticated: true });
+  useEffect(() => {
+    const saved = localStorage.getItem("studio_token");
+    if (!saved || !state.isAuthenticated) return;
+
+    let cancelled = false;
 
     (async () => {
       try {
         const resp = await studioApi.getCurrentUser();
+        if (cancelled) return;
         setState({ token: saved, user: resp.data, isAuthenticated: true });
       } catch {
+        if (cancelled) return;
         localStorage.removeItem("studio_token");
         setState({ token: null, user: null, isAuthenticated: false });
       }
     })();
-  }, []);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [state.isAuthenticated]);
 
   const login = useCallback(async (email: string, password: string) => {
     const resp = await studioApi.login(email, password);

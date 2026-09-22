@@ -30,8 +30,15 @@ export function useLiveFrameQueue() {
   }, [refreshPending]);
 
   useEffect(() => {
-    void refreshPending();
-  }, [refreshPending]);
+    let cancelled = false;
+    (async () => {
+      const count = await getLiveFramePendingCount();
+      if (!cancelled) setPending(count);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     const onOnline = () => void flush();

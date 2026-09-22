@@ -719,7 +719,7 @@ input, select {
   background: var(--bg-elevated);
 }
 
-.stat.approved { background: var(--accent-green-dim); color: #34d399; }
+.stat.approved { background: var(--accent-green-dim); color: var(--accent-green); }
 .stat.rejected { background: var(--accent-red-dim); color: #f87171; }
 .stat.flagged { background: var(--accent-yellow-dim); color: #fbbf24; }
 .stat.speed { background: var(--accent-blue-dim); color: #60a5fa; }
@@ -804,7 +804,7 @@ input, select {
 
 .action-indicator.approve {
   background: rgba(6, 95, 70, 0.9);
-  color: #34d399;
+  color: var(--accent-green);
 }
 
 .action-indicator.reject {
@@ -861,7 +861,7 @@ input, select {
   border-color: var(--accent-blue);
 }
 
-.strip-thumb.approve { border-color: #34d399; }
+.strip-thumb.approve { border-color: var(--accent-green); }
 .strip-thumb.reject { border-color: #f87171; }
 .strip-thumb.flag { border-color: #fbbf24; }
 
@@ -885,9 +885,9 @@ input, select {
   font-weight: bold;
 }
 
-.thumb-badge.approve { background: #34d399; color: #000; }
-.thumb-badge.reject { background: #f87171; color: #000; }
-.thumb-badge.flag { background: #fbbf24; color: #000; }
+.thumb-badge.approve { background: var(--accent-green); color: var(--text-on-accent); }
+.thumb-badge.reject { background: #f87171; color: var(--text-on-accent); }
+.thumb-badge.flag { background: #fbbf24; color: var(--text-on-accent); }
 
 .turbo-actions {
   display: flex;
@@ -909,7 +909,7 @@ input, select {
   transition: all 0.15s;
 }
 
-.btn-approve { background: var(--accent-green-dim); color: #34d399; }
+.btn-approve { background: var(--accent-green-dim); color: var(--accent-green); }
 .btn-approve:hover { background: #047857; }
 .btn-reject { background: var(--accent-red-dim); color: #f87171; }
 .btn-reject:hover { background: #991b1b; }
@@ -958,7 +958,7 @@ input, select {
   z-index: 100;
 }
 
-.completion-modal h3 { font-size: 28px; margin: 0 0 16px 0; color: #34d399; }
+.completion-modal h3 { font-size: 28px; margin: 0 0 16px 0; color: var(--accent-green); }
 
 .completion-stats {
   display: grid;

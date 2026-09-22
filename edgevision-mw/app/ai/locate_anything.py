@@ -22,10 +22,7 @@ def _find_model() -> Path | None:
     candidates = []
     if settings.LOCATE_ANYTHING_MODEL_PATH:
         candidates.append(Path(settings.LOCATE_ANYTHING_MODEL_PATH))
-    candidates.append(
-        Path(__file__).resolve().parents[2]
-        / "frontend/public/models/locate_anything.onnx"
-    )
+    candidates.append(Path(__file__).resolve().parents[2] / "frontend/public/models/locate_anything.onnx")
     for p in candidates:
         if p.exists():
             return p
@@ -111,9 +108,7 @@ class LocateAnythingSegmenter:
         import cv2
 
         if isinstance(image, bytes):
-            arr = cv2.imdecode(
-                np.frombuffer(image, dtype=np.uint8), cv2.IMREAD_COLOR
-            )
+            arr = cv2.imdecode(np.frombuffer(image, dtype=np.uint8), cv2.IMREAD_COLOR)
             if arr is None:
                 raise ValueError("unable to decode image bytes")
             return arr
@@ -161,11 +156,7 @@ class LocateAnythingSegmenter:
             if not isinstance(item, dict):
                 continue
 
-            score = float(
-                item.get("confidence")
-                or item.get("score")
-                or item.get("confidence_score", 0.0)
-            )
+            score = float(item.get("confidence") or item.get("score") or item.get("confidence_score", 0.0))
             if score < conf_threshold:
                 continue
 

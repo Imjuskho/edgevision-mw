@@ -31,6 +31,7 @@ async def _create_user(db, role="ANNOTATOR"):
 def _make_test_image_base64() -> str:
     """Create a tiny valid JPEG as base64 for testing."""
     from PIL import Image
+
     img = Image.new("RGB", (64, 64), color="red")
     buf = io.BytesIO()
     img.save(buf, format="JPEG")

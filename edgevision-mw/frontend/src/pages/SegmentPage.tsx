@@ -50,6 +50,12 @@ export default function SegmentPage({
   const [images, setImages] = useState<ImageItem[]>([]);
   const [imagesLoading, setImagesLoading] = useState(true);
   const [imagesError, setImagesError] = useState<string | null>(null);
+  const [prevImgDatasetId, setPrevImgDatasetId] = useState(datasetId);
+  if (datasetId !== prevImgDatasetId) {
+    setPrevImgDatasetId(datasetId);
+    setImagesLoading(true);
+    setImagesError(null);
+  }
   const [currentIndex, setCurrentIndex] = useState(imageIndex);
   const [isSegmentActive, setIsSegmentActive] = useState(false);
   const [selectedClass, setSelectedClass] = useState<number>(1);
@@ -71,8 +77,6 @@ export default function SegmentPage({
   } = useRoadSegmentation();
 
   useEffect(() => {
-    setImagesLoading(true);
-    setImagesError(null);
     studioApi
       .listImages(datasetId)
       .then((resp) => {
@@ -237,7 +241,10 @@ export default function SegmentPage({
   }, [canvasReady, currentImage, clearInstances, renderSegmentResults, setAnnotations]);
 
   useEffect(() => {
-    void loadExistingRoadResult();
+    const load = async () => {
+      await loadExistingRoadResult();
+    };
+    void load();
   }, [loadExistingRoadResult]);
 
   const handleAutoSegment = useCallback(async () => {

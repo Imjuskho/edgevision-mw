@@ -29,9 +29,9 @@ describe("homePersona", () => {
     expect(config.showQueue).toBe(false);
   });
 
-  it("maps buyer to marketplace placeholder", () => {
+  it("maps buyer to marketplace browse persona", () => {
     const config = getHomePersonaConfig("BUYER");
-    expect(config.showMarketplacePlaceholder).toBe(true);
+    expect(config.showMarketplacePlaceholder).toBe(false);
     expect(config.primaryAction).toBe("browse");
   });
 });

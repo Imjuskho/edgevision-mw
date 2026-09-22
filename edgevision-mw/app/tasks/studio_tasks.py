@@ -107,9 +107,7 @@ def export_build_task(
     """Build dataset export as a Celery task."""
     try:
         self.update_state(state="PROGRESS", meta={"progress": 10})
-        result = _run_async(
-            _export_build_async(job_id, format, split_ratio, augmentations, stratify, watermark)
-        )
+        result = _run_async(_export_build_async(job_id, format, split_ratio, augmentations, stratify, watermark))
         self.update_state(state="PROGRESS", meta={"progress": 100})
         return result
     except Exception as exc:

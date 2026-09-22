@@ -1,7 +1,8 @@
 {
   "common": {
     "cancel": "Kanani",
-    "ok": "OK"
+    "ok": "OK",
+    "searchCommands": "Sakani malamulo…"
   },
   "app": {
     "name": "EdgeVision Studio",
@@ -50,9 +51,13 @@
       "quality": "Ubwino",
       "analysis": "Kuwunika",
       "taxonomies": "Mitundu",
-      "trainExport": "Phunzitsani & Tumizani"
+      "trainExport": "Phunzitsani & Tumizani",
+      "revenue": "Ndalama & Msika"
     },
-    "logout": "Tulukani"
+    "logout": "Tulukani",
+    "operator": "Zida wa Katswiri",
+    "buyer": "Chimbale cha Mwini",
+    "subject": "Tsamba la Yemwe"
   },
   "views": {
     "home": "Dashboard",
@@ -208,7 +213,22 @@
     "resume": "Pitirizani",
     "delete": "Chotsani",
     "deleteTitle": "Chotsani dataset?",
-    "deleteUnavailable": "Kuchotsa dataset sikunapezeka mu API pano. Mutha kugwiritsa ntchito archive kapena export."
+    "deleteUnavailable": "Kuchotsa dataset sikunapezeka mu API pano. Mutha kugwiritsa ntchito archive kapena export.",
+    "continueLabeling": "Pitirizani kusintha mawu",
+    "lastActivity": "Yogwira ntchito {{when}}",
+    "healthGood": "{{score}}% thanzi",
+    "healthFair": "{{score}}% zabwino",
+    "healthLow": "{{score}}% zofunika ntchito",
+    "createSourceType": "Mtundu wa Chomwe Chiri",
+    "createSuccess": "Dataset yapangidwa",
+    "createFallback": "Tikupita ku kutsitsa — dataset idzapangidwa pa kutsitsa koyamba",
+    "errorTitle": "Zalephera kutsegula ma dataset",
+    "errorBody": "Onani kulumikizana kwanu ndipo yesaninso.",
+    "retry": "Yesaninso",
+    "tierCurated": "Yakonzedwa",
+    "tierAnnotated": "Yalembedwa",
+    "tierRaw": "Yaiya",
+    "tierUnknown": "Yosadziwika"
   },
   "canvas": {
     "aiAssist": "Thandizo la AI",
@@ -237,6 +257,17 @@
     "imagesPerHour": "zithunzi pa ola",
     "batchComplete": "Zatheka!",
     "allReviewed": "Zithunzi zonse zaonzedwa.",
+    "loadFailed": "Zalephera kutsegula mndandanda wa kuwunika",
+    "completeness": "Kuthira",
+    "accuracy": "Kulondoka",
+    "iaa": "IAA",
+    "labels": "mawu",
+    "image": "Chithunzi",
+    "annotations": "zolemba",
+    "prev": "Yapitalo",
+    "next": "Yotsatira",
+    "selectImage": "Sankhani chithunzi kuchokera ku sidebar",
+    "loading": "Ikutsitsa...",
     "status": {
       "submitted": "Yatumizidwa",
       "certified": "Yavomerezedwa",
@@ -420,6 +451,11 @@
   "login": {
     "title": "EdgeVision Studio",
     "subtitle": "Kusanthula zithunzi ndi AI kwa malo a ku khomo",
+    "eyebrow": "Kusanthula m'minda ku Malawi",
+    "valueStatement": "Santhulani zithunzi za misewu ndi ulimi zochokera ku malo a ku khomo — ndi chitetezo cham'madzi.",
+    "trustPrivacy": "Chitetezo chachikhalidwe: zithunzi zimadzutsidwa ndi kulolezana kwa malangizo.",
+    "trustConsent": "Dataset iliyonse imayang'anira chitetezo chagululi musanatulutsidwe.",
+    "trustJurisdiction": "Yapangidwa kwa ntchito za ku Malawi ndi kulamulira kwa deta ya m'dziko.",
     "email": "Imelo",
     "password": "Mawu achinsinsi",
     "fullName": "Dzina LONSE",
@@ -464,6 +500,7 @@
     "labelPickerShortcut": "Kusankha mawu (dinani L)",
     "aiModelSource": "Model ya AI yomwe idagwiritsidwa ntchito",
     "searchLabels": "Sakani mawu...",
+    "searchLabel": "Sakani mawu...",
     "noLabelsFound": "Palibe mawu omwe mwapeza",
     "unsaved": "Osasungidwa",
     "inspector": "Woyang'anira",
@@ -486,6 +523,13 @@
     "preLabelFailed": "Kupeza kwa AI kwalephera",
     "preLabelHint": "Ma pre-label sasungidwa mpaka mudinane Sungani",
     "aiModelsUnavailable": "Palibe ma modeli a AI. Thirani ./scripts/download_ai_models.sh pa seva.",
+    "noMatches": "Palibe zomwe zafanana",
+    "escToClose": "Dinani Escape kuti mutseke",
+    "labelCount": "Mawu {{count}}",
+    "hintPolygon": "Dinani kuwonjezera malo · Dinawi kuti mutseke polygon · Dinani Delete kuti muchotsa zosankhidwa",
+    "hintBbox": "Dinani/kokani kupanga · Dinawi pa bokosi kuti musinthe mawu · Shift+dinani kusankha mitengo · Delete/Backspace kuti muchotsa",
+    "zoomPanHint": "Zungulirani kuti mukulitse · Space+kokani kapena dinani pakati kuti mugwedeze",
+    "annotationCount": "Zolemba {{count}}",
     "categories": {
       "motorized": "Magalimoto",
       "non_motorized": "Zida zosagwira Mphamvu",
@@ -523,6 +567,13 @@
     "allFailed": "Palibe mafaili omwe adatumizidwa. Mafaili {{count}} alephera.",
     "partialFailed": "Mafaili {{count}} alephera kutsimikizika.",
     "newFiles": "mafaili atsopano",
+    "statusUploaded": "Yatsitsidwa",
+    "statusError": "Cholakwika",
+    "removeFile": "Chotsani",
+    "clear": "Chotsani",
+    "datasetRequired": "Lowetsani ID ya Dataset kuti mutsegule kutsitsa",
+    "fetchUpload": "Dikirani & Tsitsani",
+    "summary": "{{uploaded}} yatsitsidwa, {{skipped}} yanayikidwa, {{total}} zonse",
     "modes": {
       "file": "Mafaili",
       "webcam": "Kamera",
@@ -555,6 +606,11 @@
     "confirmSubmit": "Tumizani ntchitoyi? Simudzatha kusintha.",
     "loading": "Tikutsitsa mndandanda...",
     "progress": "Kupita patsogolo",
+    "loadFailed": "Zalephera kutsegula mndandanda",
+    "overdueOnly": "Zapita nthawi kokha",
+    "status": "Hali",
+    "actions": "Zochita",
+    "dataset": "Dataset",
     "subtitle": "Landirani ndi kumaliza ntchito zosanthula."
   },
   "admin": {
@@ -583,11 +639,16 @@
     "assignSuccess": "Ntchito yapangidwa bwino!",
     "assignFailed": "Zalephera kupanga ntchito.",
     "loading": "Ikutsitsa ntchito...",
-    "empty": "Palibe ntchito pano. Pangani imodzi kuti muyambe."
+    "empty": "Palibe ntchito pano. Pangani imodzi kuti muyambe.",
+    "loadFailed": "Zalephera kutsegula mapeghe"
   },
   "reviewQueue": {
     "title": "Mndandanda wa QA",
     "noJobs": "Palibe ntchito zodikirira kuwunika",
+    "dataset": "Dataset",
+    "progress": "Kupita patsogolo",
+    "status": "Hali",
+    "date": "Tsiku",
     "open": "Tsegulani",
     "certified": "Zatsimikizidwa",
     "rejected": "Zakanidwa",
@@ -749,6 +810,7 @@
     "displayAll": "Mabokosi, ma mask ndi 3D",
     "bbox3dLimitation": "Mabokosi a 3D ndi makhalidwe (yaw=0, palibe metric depth)",
     "bbox3dDepthOnnx": "Mabokosi a 3D amagwiritsa ntchito ONNX depth (osati metric meters)",
+    "bbox3dNone": "Palibe zinthu za 3D — tikwonetsera mabokosi a 2D",
     "chipOrientationMirrored": "Chithunzi chosinthidwa — ma coords mu analyzed space",
     "chipDepthHeuristic": "Depth heuristic — palibe ONNX model",
     "ocrMirrorBlocked": "OCR imafuna chithunzi chosasinthidwa — letsani Mirror preview",
@@ -761,7 +823,19 @@
     "datasetRequired": "Sankhani dataset musanatseke mafremu",
     "datasetRequiredHint": "Tsegulani live annotate kuchokera ku dataset kuti musunge ma AI label mu studio.",
     "noAnnotationsHint": "Palibe zomwe zazindikirika — kusunga chithunzi chokha (palibe AI prelabels)",
-    "openInStudio": "Sinthani mu studio"
+    "openInStudio": "Sinthani mu studio",
+    "autoSave": "Sungani zithunzi zokha pakachitika zochitika",
+    "events": "Zochitika",
+    "noEvents": "Palibe zochitika zilizonse",
+    "eventSaved": "zasungidwa",
+    "autoSaveSuccess": "Clip ya zochitika yasungidwa ku dataset",
+    "eventType": {
+      "rule": "Zochitika zayambitsidwa",
+      "dwell": "Kukhala kwakanthawi",
+      "presence": "Kupezeka",
+      "confidenceDrop": "Kutsika kwa confidence",
+      "closeApproach": "Kuyandikira kwambiri"
+    }
   },
   "turboReview": {
     "liveCaptures": "Zojambula moyo",
@@ -967,6 +1041,110 @@
     "cmdQueued": "Lamulo \"{{cmd}}\" lalowa m'mndandanda",
     "cmdFailed": "Zalephera kutumiza lamulo",
     "alertsPanel": "Machenjezo",
-    "noAlerts": "Palibe machenjezo ogwira ntchito"
+    "noAlerts": "Palibe machenjezo ogwira ntchito",
+    "noCapturesYet": "Palibe zojambula pano",
+    "lastSnapshot": "Chithunzi Chotsatira",
+    "eventsCaptured": "{{count}} zojambulidwa",
+    "eventsUploaded": "{{count}} zotumizidwa",
+    "lastCaptureTime": "Komaliza: {{time}}"
+  },
+  "operator": {
+    "title": "Konzola ya Woyendetsa",
+    "subtitle": "Kuyang'anira ndi kuthana ndi machenjezo",
+    "overview": "Kuwunika",
+    "totalEarnings": "Ndalama Zonse",
+    "totalAnnotations": "Zolemba Zonse",
+    "pendingAlerts": "Alerts Zodikirira",
+    "totalEvents": "Zochitika Zogwira Ntchito",
+    "liveEvents": "Zochitika Zogwira Ntchito",
+    "markSeen": "Onetsa kuti mwawaonela",
+    "loadingEvents": "Tikutsitsa zochitika...",
+    "loadingEventsBody": "Kulumikizana ndi injini ya perception",
+    "noEvents": "Palibe zochitika",
+    "noEventsBody": "Zochitika zidzawonekera pano pamene injini ya perception idzapeza kudyera, kutchula, kutsika的信心, kapena kufupi.",
+    "eventsTotal": "Zochitika {{total}} zonse zalembedwa",
+    "alerts": "Machenjezo a Dongosolo",
+    "noAlerts": "Palibe machenjezo",
+    "noAlertsBody": "Zonse zikuyenda bwino.",
+    "acknowledge": "Ndazindikira",
+    "payoutHistory": "Maloipiro",
+    "noPayouts": "Palibe malipiro",
+    "noPayoutsBody": "Malipiro adzawonekera pano.",
+    "nodeStatus": "Node Status",
+    "nodeId": "Node ID",
+    "noNode": "Palibe node yolumikizidwa",
+    "noNodeBody": "Tembenukirani ku admin kuti mulumikize node.",
+    "loadError": "Analodha vuto pa dashboard",
+    "noData": "Palibe deta",
+    "newCount": "{{count}} atsopano"
+  },
+  "subject": {
+    "consentActive": "Yogwira Ntchito",
+    "consentWithdrawn": "Yasiyidwa",
+    "consentExpired": "Yatha Nthawi"
+  },
+  "tour": {
+    "annotator": {
+      "sidebarTitle": "Malo anu ogwira ntchito",
+      "sidebarBody": "Sidebar imawonetsa ma dataset ndi njira zogwirira ntchito. Sankhani dataset kaye musanasanthule.",
+      "annotateTitle": "Yambani kusintha mawu",
+      "annotateBody": "Tsegulani Santhulani kuti mujambule mabokosi pa zithunzi. Gwiritsani ntchito 1–9 kuti musankhe magulu.",
+      "shortcutsTitle": "Njira zachidziwitso",
+      "shortcutsBody": "Dinani ? kuti mupeze thandizo. ⌘K imatsegula kusakira kwadziko lonse.",
+      "saveTitle": "Sungani ndi kufananitsa",
+      "saveBody": "Dinani ⌘S kuti musunge. Kusintha kwa offline kumasunga patsogolo panu."
+    },
+    "operator": {
+      "fleetTitle": "Konzola ya malo",
+      "fleetBody": "Yang'anirani ma node, telemetri, ndi tumizani malamulo mu Expert mode.",
+      "uploadTitle": "Tsitsani zithunzi",
+      "uploadBody": "Tsitsani zithunzi za m'minda mu dataset kuchokera pano.",
+      "exportTitle": "Njira yotumiza",
+      "exportBody": "Pangani kutumiza kwa COCO, YOLO, kapena VOC pamene ma dataset akhala okonzeka."
+    },
+    "qa": {
+      "reviewTitle": "Kuwunika QA",
+      "reviewBody": "Simikizani kapena kanani magulu a zolemba. Yambitsani Fast review ya TurboReview.",
+      "dedupTitle": "Kuchotsa zofanana",
+      "dedupBody": "Pezani zithunzi zofanana musanayambe kuphunzitsa.",
+      "healthTitle": "Thanzi la dataset",
+      "healthBody": "Yang'anirani kukhira, kulondoka, ndi kulingana kwa magulu.",
+      "exportTitle": "Kutumiza",
+      "exportBody": "Tumizani ma dataset owunikiridwa ku njira zophunzitsira."
+    },
+    "admin": {
+      "assignTitle": "Ikani ntchito",
+      "assignBody": "Pangani mapeghe osanthula kwa bungwe lanu."
+    },
+    "field": {
+      "fleetTitle": "Ma node a m'minda",
+      "fleetBody": "Onani bwanji la node ndi kumenya kwoyamba kwa mtima.",
+      "datasetsTitle": "Ma Dataset",
+      "datasetsBody": "Onani ma dataset amene ali ndi zojambula za m'minda."
+    }
+  },
+  "marketplace": {
+    "title": "Msika wa Ma Dataset",
+    "subtitle": "Onani ndi kulandira ma dataset owunikiridwa kuchokera ku m'minda ku Malawi.",
+    "search": "Sakani ma dataset",
+    "filterLicense": "Sefa ndi chilolezo",
+    "filterCategory": "Sefa ndi gulu",
+    "allLicenses": "Ma chilolezo onse",
+    "allCategories": "Magulu onse",
+    "requestQuote": "Funsani Mtengo",
+    "quoting": "Ikukonza mtengo...",
+    "quoteResult": "Mtengo: ${{price}} (kwatha {{date}})",
+    "quoteFailed": "Zalephera kupanga mtengo. Yesaninso.",
+    "noResults": "Palibe ma dataset omwe mwapeza",
+    "noResultsBody": "Yesani kusintha kusakira kapena sefa yanu.",
+    "found": "Ma dataset {{count}} alipo",
+    "samples": "Zitsanzo {{count}}",
+    "classes": "Magulu {{count}}",
+    "price": "Kuyambira ku ${{price}}",
+    "iaaScore": "IAA {{score}}%",
+    "consentCoverage": "{{pct}}% chilolezo",
+    "browse": "Onani Msika",
+    "loadFailed": "Zalephera kutsegula ma dataset",
+    "loadFailedBody": "Onani kulumikizana kwanu ndipo yesaninso."
   }
 }

@@ -73,8 +73,10 @@ class TestMono3d:
         enriched = attach_3d_boxes(detections, image)
         corners = enriched[0]["bbox_3d"]["corners"]
         assert len(corners) == 8
-        assert all(0.0 <= c[0] <= 1.0 for c in corners)
-        assert all(0.0 <= c[1] <= 1.0 for c in corners)
+        for corner in corners:
+            assert len(corner) == 3
+        assert all(isinstance(c[0], float) for c in corners)
+        assert all(isinstance(c[1], float) for c in corners)
 
     def test_flip_cuboid_x_identity_via_frontend_contract(self):
         """Document expected 3D corner layout for downstream consumers."""

@@ -20,7 +20,10 @@ export type View =
   | "datasets"
   | "fleet"
   | "liveAnnotate"
-  | "settings";
+  | "settings"
+  | "operator"
+  | "buyer"
+  | "subject";
 
 export interface ParsedRoute {
   view: View;
@@ -85,6 +88,9 @@ export const GLOBAL_PATHS: Record<View, string> = {
   training: "/training",
   export: "/export",
   settings: "/settings",
+  operator: "/operator",
+  buyer: "/buyer",
+  subject: "/subject",
 };
 
 /** Legacy flat paths kept for redirects. */
@@ -225,6 +231,9 @@ export const VIEW_TITLES: Record<View, string> = {
   fleet: "Nodes",
   liveAnnotate: "Live Annotation",
   settings: "Settings",
+  operator: "Operator Console",
+  buyer: "Buyer Dashboard",
+  subject: "Subject Portal",
 };
 
 /** Admin/QA-only routes — non-admins are redirected to dashboard. */

@@ -24,15 +24,15 @@ class DatasetAssignment(TimestampMixin, Base):
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
     )
-    status: Mapped[str] = mapped_column(
-        String(20), nullable=False, default="ASSIGNED"
-    )
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="ASSIGNED")
     deadline: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True,
+        DateTime(timezone=True),
+        nullable=True,
     )
     priority: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     total_images: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     completed_images: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     rejection_reason: Mapped[str | None] = mapped_column(
-        String(1000), nullable=True,
+        String(1000),
+        nullable=True,
     )

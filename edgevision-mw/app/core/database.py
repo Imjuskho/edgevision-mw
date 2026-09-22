@@ -26,9 +26,7 @@ engine = create_async_engine(
     ),
 )
 
-async_session = async_sessionmaker(
-    class_=AsyncSession, bind=engine, expire_on_commit=False
-)
+async_session = async_sessionmaker(class_=AsyncSession, bind=engine, expire_on_commit=False)
 
 
 class Base(DeclarativeBase):

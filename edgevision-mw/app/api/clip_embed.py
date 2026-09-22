@@ -2,6 +2,7 @@
 
 Provides server-side CLIP embedding computation for semantic deduplication.
 """
+
 from __future__ import annotations
 
 from uuid import UUID
@@ -72,9 +73,7 @@ async def embed_image(
     if annotation_id:
         try:
             ann_uuid = UUID(annotation_id)
-            result = await db.execute(
-                select(Annotation).where(Annotation.id == ann_uuid)
-            )
+            result = await db.execute(select(Annotation).where(Annotation.id == ann_uuid))
             ann = result.scalar_one_or_none()
             if ann:
                 emb = ImageEmbedding(
@@ -106,14 +105,10 @@ async def compute_similarity(
     """Compute cosine similarity between two stored CLIP embeddings."""
     import numpy as np
 
-    result_a = await db.execute(
-        select(ImageEmbedding).where(ImageEmbedding.annotation_id == UUID(body.image_a_id))
-    )
+    result_a = await db.execute(select(ImageEmbedding).where(ImageEmbedding.annotation_id == UUID(body.image_a_id)))
     emb_a = result_a.scalar_one_or_none()
 
-    result_b = await db.execute(
-        select(ImageEmbedding).where(ImageEmbedding.annotation_id == UUID(body.image_b_id))
-    )
+    result_b = await db.execute(select(ImageEmbedding).where(ImageEmbedding.annotation_id == UUID(body.image_b_id)))
     emb_b = result_b.scalar_one_or_none()
 
     if emb_a is None or emb_b is None:

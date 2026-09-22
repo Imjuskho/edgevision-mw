@@ -20,6 +20,24 @@ interface PeriodicSyncEvent extends Event {
 cleanupOutdatedCaches();
 precacheAndRoute(self.__WB_MANIFEST);
 
+// ─── Lifecycle: force immediate activation + notify clients ───
+
+self.addEventListener('install', () => {
+  self.skipWaiting();
+});
+
+self.addEventListener('activate', (event) => {
+  event.waitUntil(
+    caches.keys().then((names) =>
+      Promise.all(
+        names
+          .filter((name) => name.startsWith('studio-assets') || name.startsWith('workbox-precache'))
+          .map((name) => caches.delete(name))
+      )
+    ).then(() => self.clients.claim())
+  );
+});
+
 // ─── Cache Strategies ───
 
 // API responses: Network first, cache fallback (stale data better than no data)
@@ -64,10 +82,10 @@ registerRoute(
   })
 );
 
-// Static assets: Stale while revalidate
+// Static assets: Network first (avoids serving stale cached JS/CSS)
 registerRoute(
   ({ request }) => ['style', 'script', 'worker'].includes(request.destination),
-  new StaleWhileRevalidate({
+  new NetworkFirst({
     cacheName: 'studio-assets',
   })
 );

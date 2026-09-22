@@ -1,6 +1,6 @@
 import { useRef, useState, useCallback, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Camera, MonitorUp, Pencil } from "lucide-react";
+import { Camera, MonitorUp, Pencil, Wifi, WifiOff, FlipHorizontal2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useLiveAnnotation } from "../hooks/useLiveAnnotation";
 import { useLiveFrameQueue } from "../hooks/useLiveFrameQueue";
@@ -19,6 +19,9 @@ import {
 import { captureFrame, isVideoReady } from "../utils/captureFrame";
 import { Button } from "../components/ui/Button";
 import { Badge } from "../components/ui/Badge";
+import { IconButton } from "../components/ui/IconButton";
+import { Select } from "../components/ui/Select";
+import { Switch } from "../components/ui/Switch";
 import { buildPath } from "../routes/paths";
 import type { SaveFrameResult } from "../hooks/useLiveAnnotation";
 
@@ -40,21 +43,39 @@ export default function LiveAnnotatePage({ datasetId, onSaved, onNavigateToAnnot
   const [videoReady, setVideoReady] = useState(false);
   const [sourceError, setSourceError] = useState<string | null>(null);
   const [mirrored, setMirrored] = useState(() => loadMirrorPreference());
+  const [prevStream, setPrevStream] = useState<MediaStream | null>(null);
+  if (stream !== prevStream) {
+    setPrevStream(stream);
+    setVideoReady(false);
+    setSourceError(null);
+  }
+  const [prevSource, setPrevSource] = useState<"camera" | "screen" | null>(null);
+  if (source !== prevSource) {
+    setPrevSource(source);
+    if (source === "screen") setMirrored(false);
+  }
   const [modelType, setModelType] = useState("object_detection");
   const [displayMode, setDisplayMode] = useState<OverlayDisplayMode>("all");
+  const [autoSave, setAutoSave] = useState(false);
+  const [selectedLabel, setSelectedLabel] = useState("");
+  const [selectedAnnIdx, setSelectedAnnIdx] = useState<number | null>(null);
+  const lastAutoSavedEventRef = useRef<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [lastSave, setLastSave] = useState<SaveFrameResult | null>(null);
 
   const mirrorAllowed = source === "camera";
   const effectiveMirrored = isMirrored(mirrorAllowed, mirrored);
 
-  const { annotations, isInferencing, lastInferenceMs, error, saveFrame, frameSize, depthAvailable } = useLiveAnnotation({
+  const { annotations, liveEvents, isInferencing, lastInferenceMs, error, saveFrame, frameSize, depthAvailable } = useLiveAnnotation({
     videoRef,
     enabled: source !== null && videoReady,
     modelType,
     mirrored: effectiveMirrored,
     fps: 2,
     maxWidth: 448,
+    eventsEnabled: true,
+    autoSave,
+    datasetId,
   });
 
   useEffect(() => {
@@ -62,17 +83,20 @@ export default function LiveAnnotatePage({ datasetId, onSaved, onNavigateToAnnot
   }, []);
 
   useEffect(() => {
+    const saved = liveEvents.find((e) => e.auto_saved && e.event_id !== lastAutoSavedEventRef.current);
+    if (!saved) return;
+    lastAutoSavedEventRef.current = saved.event_id;
+    showToast(t("liveAnnotate.autoSaveSuccess", "Event clip auto-saved to dataset"), "success");
+  }, [liveEvents, showToast, t]);
+
+  useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
 
     if (!stream) {
       video.srcObject = null;
-      setVideoReady(false);
       return;
     }
-
-    setVideoReady(false);
-    setSourceError(null);
 
     const handleCanPlay = () => {
       setVideoReady(true);
@@ -80,9 +104,6 @@ export default function LiveAnnotatePage({ datasetId, onSaved, onNavigateToAnnot
 
     video.srcObject = stream;
     video.addEventListener("canplay", handleCanPlay);
-    if (video.readyState >= 2) {
-      setVideoReady(true);
-    }
 
     video.play().catch(() => {
       // ignore autoplay failures; canplay will still update readiness
@@ -92,12 +113,6 @@ export default function LiveAnnotatePage({ datasetId, onSaved, onNavigateToAnnot
       video.removeEventListener("canplay", handleCanPlay);
     };
   }, [stream]);
-
-  useEffect(() => {
-    if (source === "screen") {
-      setMirrored(false);
-    }
-  }, [source]);
 
   useEffect(() => {
     if (!ORIENTATION_DEBUG_ENABLED || !videoReady || !effectiveMirrored) return;
@@ -243,25 +258,91 @@ export default function LiveAnnotatePage({ datasetId, onSaved, onNavigateToAnnot
   const statusError = ocrBlocked ? t("liveAnnotate.ocrMirrorBlocked") : error;
 
   const liveStats = (
-    <>
-      {isInferencing && (
-        <Badge variant="info">{t("liveAnnotate.inferencing", "Inferencing...")}</Badge>
-      )}
-      {lastInferenceMs > 0 && (
-        <Badge variant="default">{lastInferenceMs}ms</Badge>
-      )}
-      {annotations.length > 0 && (
-        <Badge variant="success">
-          {annotations.length} {t("liveAnnotate.objects", "object(s)")}
-        </Badge>
-      )}
-      {pendingFrames > 0 && (
-        <Badge variant="warning">{t("liveAnnotate.pendingFrames", { count: pendingFrames })}</Badge>
-      )}
-      {!isOnline && (
-        <Badge variant="warning">{t("liveAnnotate.offlineNotice")}</Badge>
-      )}
-    </>
+    <div className="live-annotate-toolbar-stats">
+      <div className="live-annotate-toolbar-inline-controls">
+        <div className="live-annotate-toolbar-control">
+          <span className="text-caption">{t("liveAnnotate.modelShort", "Model")}</span>
+          <Select
+            value={modelType}
+            onChange={setModelType}
+            aria-label={t("liveAnnotate.modelType")}
+            options={[
+              { value: "object_detection", label: t("liveAnnotate.modelObjectDetection") },
+              { value: "road_segmentation", label: t("liveAnnotate.modelRoadSegmentation") },
+              { value: "agri_crop_classification", label: t("liveAnnotate.modelAgriCrop") },
+              { value: "agri_health_classification", label: t("liveAnnotate.modelAgriHealth") },
+              { value: "text_detection", label: t("liveAnnotate.modelTextDetection") },
+            ]}
+          />
+        </div>
+        <div className="live-annotate-toolbar-control">
+          <span className="text-caption">{t("liveAnnotate.displayShort", "Display")}</span>
+          <Select
+            value={displayMode}
+            onChange={(v) => setDisplayMode(v as OverlayDisplayMode)}
+            aria-label={t("liveAnnotate.displayMode")}
+            options={[
+              { value: "both", label: t("liveAnnotate.displayBoth") },
+              { value: "boxes", label: t("liveAnnotate.displayBoxes") },
+              { value: "masks", label: t("liveAnnotate.displayMasks") },
+              { value: "3d", label: t("liveAnnotate.display3d") },
+              { value: "all", label: t("liveAnnotate.displayAll") },
+            ]}
+          />
+        </div>
+        {mirrorAllowed && (
+          <div className="live-annotate-toolbar-control" title={t("liveAnnotate.mirrorPreview")}>
+            <IconButton
+              label={t("liveAnnotate.mirrorPreview")}
+              size="sm"
+              aria-pressed={mirrored}
+              className={mirrored ? "live-annotate-toolbar-control--active" : undefined}
+              onClick={() => {
+                const next = !mirrored;
+                setMirrored(next);
+                saveMirrorPreference(next);
+              }}
+            >
+              <FlipHorizontal2 size={14} />
+            </IconButton>
+          </div>
+        )}
+        <div className="live-annotate-toolbar-control" title={t("liveAnnotate.autoSave")}>
+          <Switch
+            id="live-toolbar-autosave"
+            checked={autoSave}
+            onChange={setAutoSave}
+            label={t("liveAnnotate.autoSaveShort", "Auto")}
+          />
+        </div>
+      </div>
+
+      <div className="live-annotate-toolbar-badges">
+        {isInferencing && (
+          <Badge variant="info" className="live-annotate-pulse">{t("liveAnnotate.inferencing", "Inferencing...")}</Badge>
+        )}
+        {!isInferencing && lastInferenceMs > 0 && (
+          <Badge variant="default">{lastInferenceMs}ms</Badge>
+        )}
+        {annotations.length > 0 && (
+          <Badge variant="success">
+            {annotations.length} {t("liveAnnotate.objects", "object(s)")}
+          </Badge>
+        )}
+        {pendingFrames > 0 && (
+          <Badge variant="warning">{t("liveAnnotate.pendingFrames", { count: pendingFrames })}</Badge>
+        )}
+        {!isOnline && (
+          <Badge variant="warning">{t("liveAnnotate.offlineNotice")}</Badge>
+        )}
+        <span className="live-annotate-depth-badge">
+          {depthAvailable
+            ? <Badge variant="success">{t("liveAnnotate.depthOnnxShort", "Depth: ONNX")}</Badge>
+            : <Badge variant="warning">{t("liveAnnotate.depthHeuristicShort", "Depth: Est.")}</Badge>
+          }
+        </span>
+      </div>
+    </div>
   );
 
   return (
@@ -283,18 +364,81 @@ export default function LiveAnnotatePage({ datasetId, onSaved, onNavigateToAnnot
 
       <div className="live-annotate-body">
         {!source ? (
-          <div className="live-annotate-picker">
-            <Button variant="primary" icon={<Camera size={16} />} onClick={() => void handleStartCamera()}>
-              {t("liveAnnotate.startCamera", "Start Camera")}
-            </Button>
-            <Button variant="secondary" icon={<MonitorUp size={16} />} onClick={() => void handleStartScreen()}>
-              {t("liveAnnotate.startScreen", "Share Screen")}
-            </Button>
-            {sourceError && (
-              <div className="live-annotate-error" role="alert">
-                {sourceError}
+          <div className="live-annotate-setup">
+            <div className="live-annotate-setup-main">
+              <div className="live-annotate-picker">
+                <h2 className="live-annotate-setup-heading">
+                  {t("liveAnnotate.setupHeading", "Select Input Source")}
+                </h2>
+                <div className="live-annotate-picker-actions">
+                  <Button variant="primary" icon={<Camera size={16} />} onClick={() => void handleStartCamera()}>
+                    {t("liveAnnotate.startCamera", "Start Camera")}
+                  </Button>
+                  <Button variant="secondary" icon={<MonitorUp size={16} />} onClick={() => void handleStartScreen()}>
+                    {t("liveAnnotate.startScreen", "Share Screen")}
+                  </Button>
+                </div>
+                {sourceError && (
+                  <div className="live-annotate-error" role="alert">
+                    {sourceError}
+                  </div>
+                )}
+
+                <div className="live-annotate-connection-status">
+                  {isOnline ? (
+                    <>
+                      <Wifi size={14} />
+                      <span className="text-caption">{t("liveAnnotate.connected", "Connected — inference via server")}</span>
+                    </>
+                  ) : (
+                    <>
+                      <WifiOff size={14} />
+                      <span className="text-caption">{t("liveAnnotate.offlineMode", "Offline — on-device inference if available")}</span>
+                    </>
+                  )}
+                </div>
+
+                {pendingFrames > 0 && (
+                  <Badge variant="warning">
+                    {t("liveAnnotate.pendingFrames", { count: pendingFrames })} {t("liveAnnotate.pendingFlushHint", "— will sync when connected")}
+                  </Badge>
+                )}
               </div>
-            )}
+
+              <div className="live-annotate-setup-info">
+                {datasetId ? (
+                  <div className="live-annotate-dataset-badge">
+                    <Badge variant="success">{t("liveAnnotate.datasetLabel", "Dataset")}: {datasetId}</Badge>
+                    <span className="text-caption">
+                      {t("liveAnnotate.datasetHint", "Saved frames will be added to this dataset.")}
+                    </span>
+                  </div>
+                ) : (
+                  <p className="live-annotate-offline-notice" role="status">
+                    {t("liveAnnotate.datasetRequiredHint", "Open live annotate from a dataset to save AI labels into the studio.")}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="live-annotate-setup-sidebar">
+              <LiveAnnotateInspector
+                modelType={modelType}
+                onModelTypeChange={setModelType}
+                displayMode={displayMode}
+                onDisplayModeChange={setDisplayMode}
+                mirrored={mirrored}
+                onMirrorToggle={handleMirrorToggle}
+                mirrorAllowed={mirrorAllowed}
+                depthAvailable={depthAvailable}
+                autoSave={autoSave}
+                onAutoSaveToggle={setAutoSave}
+                events={liveEvents}
+                annotations={annotations}
+                selectedAnnIdx={selectedAnnIdx}
+                onSelectAnn={setSelectedAnnIdx}
+              />
+            </div>
           </div>
         ) : (
           <AnnotateWorkspace
@@ -303,14 +447,13 @@ export default function LiveAnnotatePage({ datasetId, onSaved, onNavigateToAnnot
             datasetId={datasetId}
             currentIndex={0}
             totalImages={1}
-            selectedLabel=""
-            onLabelChange={() => {}}
+            selectedLabel={selectedLabel}
+            onLabelChange={setSelectedLabel}
             onPrev={() => {}}
             onNext={() => {}}
             onSave={() => void handleSave()}
             saving={saving}
             hideAutoLabel
-            hideLabelSelector
             saveLabel={t("liveAnnotate.save", "Save Frame")}
             hideSaveKbd
             toolbarExtra={liveStats}
@@ -336,6 +479,12 @@ export default function LiveAnnotatePage({ datasetId, onSaved, onNavigateToAnnot
                 onMirrorToggle={handleMirrorToggle}
                 mirrorAllowed={mirrorAllowed}
                 depthAvailable={depthAvailable}
+                autoSave={autoSave}
+                onAutoSaveToggle={setAutoSave}
+                events={liveEvents}
+                annotations={annotations}
+                selectedAnnIdx={selectedAnnIdx}
+                onSelectAnn={setSelectedAnnIdx}
               />
             }
           >
@@ -360,7 +509,11 @@ export default function LiveAnnotatePage({ datasetId, onSaved, onNavigateToAnnot
                 displayMode={displayMode}
                 previewMirrored={effectiveMirrored}
                 depthAvailable={depthAvailable}
-                orientation={effectiveMirrored ? "mirrored" : "normal"}
+                selectedTrackId={
+                  selectedAnnIdx != null && annotations[selectedAnnIdx]?.track_id != null
+                    ? annotations[selectedAnnIdx].track_id!
+                    : null
+                }
               />
               {isStarting && (
                 <div className="live-annotate-loading">

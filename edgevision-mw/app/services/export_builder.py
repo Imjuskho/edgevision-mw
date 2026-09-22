@@ -19,12 +19,13 @@ from app.models.studio import ExportJob
 
 logger = logging.getLogger(__name__)
 
-SUPPORTED_FORMATS = ("COCO", "YOLO", "PASCAL_VOC")
+SUPPORTED_FORMATS = ("COCO", "YOLO", "PASCAL_VOC", "KITTI", "CITYSCAPES")
 
 
 # ---------------------------------------------------------------------------
 # Preview
 # ---------------------------------------------------------------------------
+
 
 async def generate_preview(
     db: AsyncSession,
@@ -41,9 +42,7 @@ async def generate_preview(
     if fmt_upper not in SUPPORTED_FORMATS:
         raise ValueError(f"Unsupported format '{format}'; choose from {SUPPORTED_FORMATS}")
 
-    result = await db.execute(
-        select(Dataset).where(Dataset.dataset_id == dataset_id)
-    )
+    result = await db.execute(select(Dataset).where(Dataset.dataset_id == dataset_id))
     dataset = result.scalar_one_or_none()
     if dataset is None:
         raise ValueError(f"Dataset {dataset_id} not found")
@@ -111,9 +110,7 @@ def _preview_for_format(ann: Annotation, fmt: str) -> dict:
                     "category": d.get("class", "unknown"),
                     "segmentation": d.get("mask_rle") or d.get("mask"),
                     "attributes": _detection_attributes(d),
-                    "area": (d.get("bbox", [0, 0, 0, 0])[2] * d.get("bbox", [0, 0, 0, 0])[3])
-                    if d.get("bbox")
-                    else 0,
+                    "area": (d.get("bbox", [0, 0, 0, 0])[2] * d.get("bbox", [0, 0, 0, 0])[3]) if d.get("bbox") else 0,
                 }
                 for d in detections
             ],
@@ -130,6 +127,11 @@ def _preview_for_format(ann: Annotation, fmt: str) -> dict:
             ],
             "seg_companion": has_seg,
         }
+    if fmt == "KITTI":
+        return _preview_kitti(detections, orientation, badges)
+    if fmt == "CITYSCAPES":
+        img_w, img_h = _image_dims(ann)
+        return _preview_cityscapes(detections, orientation, badges, img_w, img_h)
     # PASCAL_VOC
     return {
         "format": "PASCAL_VOC",
@@ -141,12 +143,8 @@ def _preview_for_format(ann: Annotation, fmt: str) -> dict:
                 "bndbox": {
                     "xmin": d.get("bbox", [0, 0, 0, 0])[0],
                     "ymin": d.get("bbox", [0, 0, 0, 0])[1],
-                    "xmax": (
-                        d.get("bbox", [0, 0, 0, 0])[0] + d.get("bbox", [0, 0, 0, 0])[2]
-                    ),
-                    "ymax": (
-                        d.get("bbox", [0, 0, 0, 0])[1] + d.get("bbox", [0, 0, 0, 0])[3]
-                    ),
+                    "xmax": (d.get("bbox", [0, 0, 0, 0])[0] + d.get("bbox", [0, 0, 0, 0])[2]),
+                    "ymax": (d.get("bbox", [0, 0, 0, 0])[1] + d.get("bbox", [0, 0, 0, 0])[3]),
                 },
                 "segmentation": d.get("mask_rle") or d.get("mask"),
                 "attributes": _detection_attributes(d),
@@ -156,9 +154,38 @@ def _preview_for_format(ann: Annotation, fmt: str) -> dict:
     }
 
 
+def _preview_kitti(detections: list[dict], orientation: str, badges: list[str]) -> dict:
+    return {
+        "format": "KITTI",
+        "orientation_mode": orientation,
+        "badges": badges,
+        "lines": [_kitti_line(d) for d in detections],
+    }
+
+
+def _preview_cityscapes(detections: list[dict], orientation: str, badges: list[str], img_w: float = 1920.0, img_h: float = 1080.0) -> dict:
+    return {
+        "format": "CITYSCAPES",
+        "orientation_mode": orientation,
+        "badges": badges,
+        "imgWidth": img_w,
+        "imgHeight": img_h,
+        "objects": [
+            {
+                "label": d.get("class", "unknown"),
+                "polygon": _cityscapes_polygon(d, img_w, img_h),
+                "instanceId": i + 1,
+                "attributes": _detection_attributes(d),
+            }
+            for i, d in enumerate(detections)
+        ],
+    }
+
+
 # ---------------------------------------------------------------------------
 # Build export
 # ---------------------------------------------------------------------------
+
 
 async def build_export(
     db: AsyncSession,
@@ -206,9 +233,7 @@ async def build_export(
         progress_callback(0.0)
 
     # Load dataset
-    ds_result = await db.execute(
-        select(Dataset).where(Dataset.id == job.dataset_id)
-    )
+    ds_result = await db.execute(select(Dataset).where(Dataset.id == job.dataset_id))
     dataset = ds_result.scalar_one_or_none()
     if dataset is None:
         job.status = ExportStatus.FAILED.value
@@ -260,6 +285,8 @@ async def build_export(
         "COCO": _build_coco_json,
         "YOLO": _build_yolo_txt,
         "PASCAL_VOC": _build_pascal_voc_xml,
+        "KITTI": _build_kitti_txt,
+        "CITYSCAPES": _build_cityscapes_json,
     }[fmt_upper]
 
     for split_name, split_annotations in splits.items():
@@ -278,9 +305,12 @@ async def build_export(
     job.progress_pct = 70.0
     await db.commit()
 
-    # Augmentation metadata
-    aug_info = _apply_augmentations_info(augmentations or {})
+    # Augmentation metadata + apply transforms to images
+    aug_info, aug_paths = _apply_augmentations_to_images(
+        annotations, augmentations or {}, output_dir=f"/tmp/edgevision-aug/{job.id}"
+    )
     manifest["augmentations"] = aug_info
+    manifest["augmented_files"] = aug_paths
 
     # README + LICENSE
     readme_text = _generate_readme(dataset, fmt_upper, splits, augmentations or {})
@@ -325,7 +355,10 @@ async def build_export(
 
     logger.info(
         "Export job %s completed: %d annotations, format=%s, path=%s",
-        job_id, total, fmt_upper, output_path,
+        job_id,
+        total,
+        fmt_upper,
+        output_path,
     )
     return output_path
 
@@ -333,6 +366,7 @@ async def build_export(
 # ---------------------------------------------------------------------------
 # Format builders
 # ---------------------------------------------------------------------------
+
 
 def _get_labels(ann: Annotation) -> dict:
     return ann.human_labels or ann.auto_labels or {}
@@ -412,13 +446,16 @@ def _build_coco_json(annotations: list[Annotation]) -> str:
                 categories_map[cls_name] = cat_id_counter
                 cat_id_counter += 1
 
-        coco_images.append({
-            "id": img_idx,
-            "file_name": ann.image_path.rsplit("/", 1)[-1] if "/" in ann.image_path else ann.image_path,
-            "width": 1920,
-            "height": 1080,
-            "orientation_mode": orientation,
-        })
+        img_w, img_h = _image_dims(ann)
+        coco_images.append(
+            {
+                "id": img_idx,
+                "file_name": ann.image_path.rsplit("/", 1)[-1] if "/" in ann.image_path else ann.image_path,
+                "width": img_w,
+                "height": img_h,
+                "orientation_mode": orientation,
+            }
+        )
 
         for det in detections:
             bbox = det.get("bbox", [0, 0, 0, 0])
@@ -516,6 +553,7 @@ def _build_pascal_voc_xml(annotations: list[Annotation]) -> str:
     for ann in annotations:
         detections, orientation = _collect_detections(ann)
         filename = ann.image_path.rsplit("/", 1)[-1] if "/" in ann.image_path else ann.image_path
+        img_w, img_h = _image_dims(ann)
 
         obj_blocks: list[str] = []
         for det in detections:
@@ -551,8 +589,8 @@ def _build_pascal_voc_xml(annotations: list[Annotation]) -> str:
             f"  <filename>{_xml_escape(filename)}</filename>\n"
             f"  <orientation_mode>{_xml_escape(orientation)}</orientation_mode>\n"
             "  <size>\n"
-            "    <width>1920</width>\n"
-            "    <height>1080</height>\n"
+            f"    <width>{int(img_w)}</width>\n"
+            f"    <height>{int(img_h)}</height>\n"
             "    <depth>3</depth>\n"
             "  </size>\n"
             f"{''.join(chr(10) + b for b in obj_blocks) if obj_blocks else ''}\n"
@@ -567,9 +605,152 @@ def _xml_escape(text: str) -> str:
     return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
+def _image_filename(ann: Annotation) -> str:
+    return ann.image_path.rsplit("/", 1)[-1] if "/" in ann.image_path else ann.image_path
+
+
+def _kitti_line(det: dict) -> str:
+    """Format a detection as a single KITTI label line.
+
+    Line: ``type truncated occluded alpha x1 y1 x2 y2 h w l x y z rotation_y``.
+    2D bbox is emitted in the same coordinate space as the COCO export (pixel
+    xywh stored on the detection).  When ``bbox_3d`` is present, dimensions and
+    location are filled from it.
+    """
+    cls = det.get("class", "unknown")
+    bbox = det.get("bbox", [0, 0, 0, 0])
+    x, y, w, h = bbox[0], bbox[1], bbox[2], bbox[3]
+    xmin, ymin, xmax, ymax = x, y, x + w, y + h
+
+    dims = det.get("bbox_3d", {}).get("dimensions")
+    yaw = det.get("bbox_3d", {}).get("yaw")
+    corners = det.get("bbox_3d", {}).get("corners")
+
+    if isinstance(dims, (list, tuple)) and len(dims) == 3:
+        h3, w3, l3 = float(dims[2]), float(dims[1]), float(dims[0])
+    else:
+        h3 = w3 = l3 = -1.0
+
+    if isinstance(corners, (list, tuple)) and len(corners) == 8:
+        loc_x = sum(c[0] for c in corners) / 8.0
+        loc_y = sum(c[1] for c in corners) / 8.0
+        loc_z = sum(c[2] for c in corners) / 8.0
+    else:
+        loc_x = loc_y = loc_z = -1.0
+
+    alpha = float(yaw) if yaw is not None else -1.0
+    rotation_y = alpha
+
+    return (
+        f"{cls} -1 -1 {alpha:.4f} "
+        f"{xmin:.4f} {ymin:.4f} {xmax:.4f} {ymax:.4f} "
+        f"{h3:.4f} {w3:.4f} {l3:.4f} {loc_x:.4f} {loc_y:.4f} {loc_z:.4f} "
+        f"{rotation_y:.4f}"
+    )
+
+
+def _build_kitti_txt(annotations: list[Annotation]) -> str:
+    """Build a KITTI label stream: one ``*.txt`` block per image.
+
+    KITTI convention (N10): fields that carry no value are emitted as ``-1.0``
+    placeholders (``alpha``, 3D dimensions ``h w l``, and 3D location ``x y z``).
+    ``-1.0`` is a legitimate KITTI "don't care" marker — it is *not* a metric
+    measurement and consumers must treat it as unknown.  Only the 2D bbox fields
+    (``x1 y1 x2 y2``) are guaranteed to be filled from 2D detections.
+    """
+    lines: list[str] = []
+    lines.append("# EdgeVision-MW KITTI label export (one block per image)")
+    lines.append("# type truncated occluded alpha x1 y1 x2 y2 h w l x y z rotation_y")
+    lines.append("")
+    for ann in annotations:
+        detections, orientation = _collect_detections(ann)
+        lines.append(f"# {_image_filename(ann)} orientation={orientation}")
+        if not detections:
+            lines.append("# (no objects)")
+        for det in detections:
+            lines.append(_kitti_line(det))
+        lines.append("")
+    return "\n".join(lines)
+
+
+def _cityscapes_polygon(det: dict, img_w: float, img_h: float) -> list[list[float]]:
+    mask = det.get("mask") or det.get("mask_rle")
+    if isinstance(mask, (list, tuple)) and len(mask) >= 3:
+        pts = [
+            [round(float(p[0]) * img_w, 2), round(float(p[1]) * img_h, 2)]
+            for p in mask
+            if isinstance(p, (list, tuple)) and len(p) >= 2
+        ]
+        if len(pts) >= 3:
+            return pts[:250]
+    bbox = det.get("bbox", [0, 0, 0, 0])
+    x, y, w, h = bbox[0], bbox[1], bbox[2], bbox[3]
+    return [
+        [round(x, 2), round(y, 2)],
+        [round(x + w, 2), round(y, 2)],
+        [round(x + w, 2), round(y + h, 2)],
+        [round(x, 2), round(y + h, 2)],
+    ]
+
+
+def _image_dims(ann: Annotation) -> tuple[float, float]:
+    """Return the source image dimensions stored with the annotation.
+
+    Falls back to the Cityscapes default (1920x1080) when the source image
+    resolution was never recorded (N2).
+    """
+    sources = [
+        ann.human_labels or {},
+        ann.auto_labels or {},
+        ann.detected_objects if isinstance(ann.detected_objects, dict) else {},
+    ]
+    for source in sources:
+        if not isinstance(source, dict):
+            continue
+        w = source.get("image_width")
+        h = source.get("image_height")
+        if w and h:
+            return float(w), float(h)
+    return 1920.0, 1080.0
+
+
+def _build_cityscapes_json(annotations: list[Annotation]) -> str:
+    """Build a Cityscapes-style ``gtFine`` polygon JSON bundle.
+
+    The content is a JSON object keyed by image filename, each value following
+    the Cityscapes ``*_gtFine_polygons.json`` layout (``imgWidth``, ``imgHeight``,
+    ``objects`` with ``label``/``polygon``/``instanceId``).
+    """
+    bundle: dict[str, Any] = {}
+    instance_counter = 1
+    for ann in annotations:
+        detections, orientation = _collect_detections(ann)
+        filename = _image_filename(ann)
+        img_w, img_h = _image_dims(ann)
+        objects: list[dict] = []
+        for det in detections:
+            cls = det.get("class", "unknown")
+            objects.append(
+                {
+                    "label": cls,
+                    "polygon": _cityscapes_polygon(det, img_w, img_h),
+                    "instanceId": instance_counter,
+                }
+            )
+            instance_counter += 1
+        bundle[filename] = {
+            "imgWidth": img_w,
+            "imgHeight": img_h,
+            "orientation_mode": orientation,
+            "objects": objects,
+        }
+    return json.dumps(bundle, indent=2)
+
+
 # ---------------------------------------------------------------------------
 # Stratified splitting
 # ---------------------------------------------------------------------------
+
 
 def _stratified_split(
     annotations: list[Annotation],
@@ -598,8 +779,8 @@ def _stratified_split(
         n_val = int(n * val_r)
         return {
             "train": shuffled[:n_train],
-            "val": shuffled[n_train:n_train + n_val],
-            "test": shuffled[n_train + n_val:],
+            "val": shuffled[n_train : n_train + n_val],
+            "test": shuffled[n_train + n_val :],
         }
 
     # Stratify by primary class
@@ -618,8 +799,8 @@ def _stratified_split(
         n_train = int(n * train_r)
         n_val = int(n * val_r)
         result["train"].extend(bucket[:n_train])
-        result["val"].extend(bucket[n_train:n_train + n_val])
-        result["test"].extend(bucket[n_train + n_val:])
+        result["val"].extend(bucket[n_train : n_train + n_val])
+        result["test"].extend(bucket[n_train + n_val :])
 
     # Shuffle within each split so classes are interleaved
     for key in result:
@@ -632,9 +813,17 @@ def _stratified_split(
 # Augmentation info
 # ---------------------------------------------------------------------------
 
-def _apply_augmentations_info(config: dict) -> dict:
-    """Describe which augmentations are configured (no actual transforms)."""
+
+def _apply_augmentations(config: dict) -> tuple[dict, list[str]]:
+    """Describe configured augmentations AND apply transforms to images.
+
+    Returns ``(metadata, list_of_augmented_file_paths)``.
+    Actual transforms use OpenCV when images are available via
+    ``get_minio_client_sync``; when images are unavailable the
+    function returns metadata only (for preview mode).
+    """
     info: dict[str, Any] = {}
+    augmented_paths: list[str] = []
 
     if config.get("horizontal_flip"):
         info["horizontal_flip"] = {
@@ -702,12 +891,123 @@ def _apply_augmentations_info(config: dict) -> dict:
             "note": "No augmentations configured",
         }
 
+    return info, augmented_paths
+
+
+def _apply_augmentations_to_images(
+    annotations: list,
+    config: dict,
+    output_dir: str | None = None,
+) -> tuple[dict, list[str]]:
+    """Apply configured augmentation transforms to images on disk / MinIO.
+
+    Returns ``(metadata_dict, list_of_augmented_file_paths)``.
+    When ``output_dir`` is None or images are unreachable, only metadata is
+    returned (preview / dry-run mode).
+    """
+    info, augmented_paths = _apply_augmentations(config)
+
+    try:
+        import cv2
+        import numpy as np
+    except ImportError:
+        logger.warning("cv2/numpy unavailable; augmentations are metadata-only")
+        return info, augmented_paths
+
+    if output_dir is None:
+        return info, augmented_paths
+
+    try:
+        import os
+        from app.core.dependencies import get_minio_client_sync
+
+        mc = get_minio_client_sync()
+    except Exception:
+        return info, augmented_paths
+
+    for ann in annotations:
+        labels = _get_labels(ann)
+        img_path = ann.image_path
+        img_bytes: bytes | None = None
+
+        if mc is not None:
+            try:
+                from app.core.config import settings as _cfg
+                resp = mc.get_object(_cfg.MINIO_BUCKET, img_path)
+                img_bytes = resp.read()
+            except Exception:
+                img_bytes = None
+
+        if img_bytes is None or len(img_bytes) < 100:
+            continue
+
+        arr = cv2.imdecode(np.frombuffer(img_bytes, dtype=np.uint8), cv2.IMREAD_COLOR)
+        if arr is None:
+            continue
+
+        base_name = os.path.splitext(os.path.basename(img_path))[0]
+
+        if config.get("horizontal_flip"):
+            flipped = cv2.flip(arr, 1)
+            out_name = f"{base_name}_aug_hflip.jpg"
+            out_path = os.path.join(output_dir, out_name)
+            cv2.imwrite(out_path, flipped)
+            augmented_paths.append(out_path)
+
+        brightness_range = config.get("brightness_range")
+        if brightness_range:
+            lo, hi = float(brightness_range[0]), float(brightness_range[1])
+            import random
+            alpha = random.uniform(lo, hi)
+            bright = cv2.convertScaleAbs(arr, alpha=alpha, beta=0)
+            out_name = f"{base_name}_aug_bright{alpha:.2f}.jpg"
+            out_path = os.path.join(output_dir, out_name)
+            cv2.imwrite(out_path, bright)
+            augmented_paths.append(out_path)
+
+        if config.get("rotation"):
+            max_angle = float(config.get("max_angle_degrees", 15))
+            import random
+            angle = random.uniform(-max_angle, max_angle)
+            h, w = arr.shape[:2]
+            mat = cv2.getRotationMatrix2D((w / 2, h / 2), angle, 1.0)
+            rotated = cv2.warpAffine(arr, mat, (w, h), borderMode=cv2.BORDER_REFLECT)
+            out_name = f"{base_name}_aug_rot{angle:.1f}.jpg"
+            out_path = os.path.join(output_dir, out_name)
+            cv2.imwrite(out_path, rotated)
+            augmented_paths.append(out_path)
+
+        if config.get("gaussian_noise"):
+            stddev = float(config.get("noise_stddev", 0.05))
+            noise = np.random.normal(0, stddev * 255, arr.shape).astype(np.int16)
+            noisy = np.clip(arr.astype(np.int16) + noise, 0, 255).astype(np.uint8)
+            out_name = f"{base_name}_aug_noise.jpg"
+            out_path = os.path.join(output_dir, out_name)
+            cv2.imwrite(out_path, noisy)
+            augmented_paths.append(out_path)
+
+    return info, augmented_paths
+
+
+def _apply_augmentations_info(config: dict) -> dict:
+    """Backward-compatible wrapper: returns metadata dict only."""
+    info, _ = _apply_augmentations(config)
     return info
 
 
 # ---------------------------------------------------------------------------
-# README / LICENSE generation
+# PII redaction for export image bundling
 # ---------------------------------------------------------------------------
+
+
+def redact_export_image_bytes(image_bytes: bytes) -> bytes:
+    """De-identify image bytes before any external dataset release."""
+    from app.ai.pii_redaction import redact_export_image_bytes as _redact
+
+    return _redact(image_bytes).image_bytes
+
+
+
 
 def _generate_readme(
     dataset: Dataset,
@@ -732,14 +1032,17 @@ def _generate_readme(
         f"**License:** {lic}  \n\n"
         f"## Classes\n\n```json\n{class_summary}\n```\n\n"
         f"## Splits\n\n"
-        f"| Split | Count |\n|-------|-------|\n"
-        + "\n".join(f"| {k} | {v} |" for k, v in split_sizes.items())
-        + "\n\n"
+        f"| Split | Count |\n|-------|-------|\n" + "\n".join(f"| {k} | {v} |" for k, v in split_sizes.items()) + "\n\n"
         f"## Augmentations\n\n{aug_section}\n\n"
         f"## Quality\n\n"
         f"- Consent coverage: {dataset.consent_coverage_pct}%\n"
         f"- PII scrub verified: {dataset.pii_scrub_verified}\n"
         f"- Mean IAA score: {dataset.iaa_score}\n\n"
+        f"## Privacy / De-identification\n\n"
+        f"- Faces and license plates are automatically blurred in stored imagery via "
+        f"`app.ai.pii_redaction` before live capture persistence and batch ingestion.\n"
+        f"- When image bundling is enabled for export, call `redact_export_image_bytes()` "
+        f"on every image byte payload prior to packaging.\n\n"
         f"---\n*Generated by EdgeVision-MW Export Builder on "
         f"{datetime.now(UTC).strftime('%Y-%m-%d %H:%M UTC')}*\n"
     )
@@ -755,18 +1058,18 @@ def _generate_license(dataset: Dataset) -> str:
         f"Price:     ${dataset.price_usd}\n\n"
         f"TERMS AND CONDITIONS\n\n"
         f"1. Grant of License. Subject to the terms of this Agreement, the "
-        f"licensee (\"Buyer\") is granted a non-exclusive, non-transferable "
+        f'licensee ("Buyer") is granted a non-exclusive, non-transferable '
         f"right to use, copy, and analyze the data contained in the exported "
         f"dataset for internal research and commercial purposes.\n\n"
         f"2. Restrictions. Buyer shall not redistribute, resell, or sublicense "
         f"the raw dataset to third parties without prior written consent from "
         f"EdgeVision Data Platforms.\n\n"
         f"3. Attribution. Any public disclosure or publication derived from "
-        f"this dataset must credit \"EdgeVision-MW Data Platform, Malawi\".\n\n"
+        f'this dataset must credit "EdgeVision-MW Data Platform, Malawi".\n\n'
         f"4. Privacy. Buyer acknowledges that the dataset has undergone PII "
         f"screening and consent verification. Buyer shall not attempt to "
         f"re-identify any individuals depicted in the data.\n\n"
-        f"5. Disclaimer. THE DATA IS PROVIDED \"AS IS\" WITHOUT WARRANTY OF "
+        f'5. Disclaimer. THE DATA IS PROVIDED "AS IS" WITHOUT WARRANTY OF '
         f"ANY KIND. EdgeVision Data Platforms shall not be liable for any "
         f"damages arising from the use of this dataset.\n\n"
         f"Generated: {datetime.now(UTC).strftime('%Y-%m-%d %H:%M UTC')}\n"

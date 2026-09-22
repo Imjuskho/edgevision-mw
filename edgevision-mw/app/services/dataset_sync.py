@@ -45,11 +45,7 @@ async def _get_or_create_studio_node(db: AsyncSession) -> Node:
 
 
 async def _get_or_create_studio_batch(db: AsyncSession, ds: Dataset) -> IngestionBatch:
-    stmt = (
-        select(IngestionBatch)
-        .where(IngestionBatch.batch_id.startswith(f"STUDIO-{ds.dataset_id}"))
-        .limit(1)
-    )
+    stmt = select(IngestionBatch).where(IngestionBatch.batch_id.startswith(f"STUDIO-{ds.dataset_id}")).limit(1)
     batch = (await db.execute(stmt)).scalar_one_or_none()
     if batch is not None:
         return batch
@@ -81,12 +77,16 @@ async def sync_image_records_to_annotations(db: AsyncSession, ds: Dataset) -> in
     )
 
     records = (
-        await db.execute(
-            select(ImageRecord)
-            .where(ImageRecord.dataset_id == ds.id)
-            .order_by(ImageRecord.created_at.asc(), ImageRecord.id.asc())
+        (
+            await db.execute(
+                select(ImageRecord)
+                .where(ImageRecord.dataset_id == ds.id)
+                .order_by(ImageRecord.created_at.asc(), ImageRecord.id.asc())
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
     max_image_index = (
         await db.execute(select(func.max(Annotation.image_index)).where(Annotation.dataset_id == ds.id))
@@ -122,9 +122,7 @@ async def sync_image_records_to_annotations(db: AsyncSession, ds: Dataset) -> in
 
 async def refresh_dataset_sample_count(db: AsyncSession, ds: Dataset) -> int:
     await db.flush()
-    total = (
-        await db.execute(select(func.count()).where(Annotation.dataset_id == ds.id))
-    ).scalar() or 0
+    total = (await db.execute(select(func.count()).where(Annotation.dataset_id == ds.id))).scalar() or 0
     ds.sample_count = total
     await db.flush()
     return total

@@ -3,6 +3,7 @@
 Exposes /metrics with HTTP request metrics, Celery task counts,
 annotation counts, and dataset health gauges.
 """
+
 from __future__ import annotations
 
 import time
@@ -119,6 +120,13 @@ ws_annotate_duration_seconds = Histogram(
     registry=registry,
 )
 
+ws_annotate_events_total = Counter(
+    "edgevision_ws_annotate_events_total",
+    "Perception events triggered/saved over live annotation WebSockets",
+    ["model_type", "event_type", "status"],
+    registry=registry,
+)
+
 depth_inference_ms = Histogram(
     "edgevision_depth_inference_seconds",
     "Monocular depth ONNX inference duration",
@@ -180,16 +188,12 @@ async def refresh_business_gauges(db) -> None:
         from app.models.dataset import Dataset
         from app.models.studio import AnnotationSession
 
-        ds_count = (
-            await db.execute(_select(func.count()).select_from(Dataset))
-        ).scalar() or 0
+        ds_count = (await db.execute(_select(func.count()).select_from(Dataset))).scalar() or 0
         datasets_total.set(ds_count)
 
         active_count = (
             await db.execute(
-                _select(func.count())
-                .select_from(AnnotationSession)
-                .where(AnnotationSession.is_active.is_(True))
+                _select(func.count()).select_from(AnnotationSession).where(AnnotationSession.is_active.is_(True))
             )
         ).scalar() or 0
         active_sessions.set(active_count)

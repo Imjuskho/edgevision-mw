@@ -10,9 +10,7 @@ from app.core.database import Base, TimestampMixin
 class Heartbeat(TimestampMixin, Base):
     __tablename__ = "heartbeats"
 
-    node_id: Mapped[UUID] = mapped_column(
-        ForeignKey("nodes.id", ondelete="CASCADE"), index=True, nullable=False
-    )
+    node_id: Mapped[UUID] = mapped_column(ForeignKey("nodes.id", ondelete="CASCADE"), index=True, nullable=False)
     battery_voltage: Mapped[float] = mapped_column(Float, nullable=False)
     solar_input_watts: Mapped[float] = mapped_column(Float, nullable=False)
     cpu_temp_celsius: Mapped[float] = mapped_column(Float, nullable=False)
@@ -25,6 +23,4 @@ class Heartbeat(TimestampMixin, Base):
     events_captured: Mapped[int] = mapped_column(Integer, nullable=False)
     events_uploaded: Mapped[int] = mapped_column(Integer, nullable=False)
     bandwidth_mbps: Mapped[float] = mapped_column(Float, nullable=False)
-    raw_diagnostics: Mapped[dict | None] = mapped_column(
-        JSONB, nullable=True
-    )
+    raw_diagnostics: Mapped[dict | None] = mapped_column(JSONB, nullable=True)

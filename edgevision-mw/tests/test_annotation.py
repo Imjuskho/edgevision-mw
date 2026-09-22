@@ -10,6 +10,7 @@ from app.models.enums import AnnotationStatus, BatchStatus, NodeCategory, NodeSt
 from app.models.ingestion import IngestionBatch
 from app.models.node import Node
 from app.services.annotation import auto_assign_jobs, calculate_iaa, get_leaderboard, submit_labels, submit_review
+from tests.conftest import _create_node
 
 
 async def _create_qa_reviewer_user(db):
@@ -25,27 +26,19 @@ async def _create_qa_reviewer_user(db):
     return user
 
 
-async def _create_node(db):
-    node = Node(
-        id=uuid4(), node_id=f"ANN-N-{uuid4().hex[:6]}",
-        district="Lilongwe", latitude=-13.9626, longitude=33.7741,
-        category=NodeCategory.ROAD, hardware_profile={}, network_config={},
-        capture_schedule="*/5 * * * *", interest_classes=["vehicle"],
-        pii_mode=PIIMode.STRICT, firmware_version="2.1.0",
-        public_key=b"\x03" * 32, status=NodeStatus.ONLINE, is_enabled=True,
-    )
-    db.add(node)
-    await db.commit()
-    return node
-
-
 async def _create_batch(db, node):
     batch = IngestionBatch(
-        id=uuid4(), batch_id=f"BATCH-{uuid4().hex[:6]}",
-        node_id=node.id, hub_id="hub-1", event_count=1,
-        file_size_bytes=1024, checksum_sha256="a" * 64,
-        node_signature=b"\x00" * 64, compression_codec="h265",
-        status=BatchStatus.INGESTED, quality_scores={},
+        id=uuid4(),
+        batch_id=f"BATCH-{uuid4().hex[:6]}",
+        node_id=node.id,
+        hub_id="hub-1",
+        event_count=1,
+        file_size_bytes=1024,
+        checksum_sha256="a" * 64,
+        node_signature=b"\x00" * 64,
+        compression_codec="h265",
+        status=BatchStatus.INGESTED,
+        quality_scores={},
     )
     db.add(batch)
     await db.commit()
@@ -54,12 +47,17 @@ async def _create_batch(db, node):
 
 async def _create_pending_annotation(db, batch, annotator_id=None):
     ann = Annotation(
-        id=uuid4(), batch_id=batch.id, image_index=0,
-        image_path="/images/001.jpg", thumbnail_path="/thumbs/001.jpg",
-        gps_lat=-13.96, gps_lon=33.77,
+        id=uuid4(),
+        batch_id=batch.id,
+        image_index=0,
+        image_path="/images/001.jpg",
+        thumbnail_path="/thumbs/001.jpg",
+        gps_lat=-13.96,
+        gps_lon=33.77,
         detected_objects={"objects": [{"class": "vehicle", "bbox": [10, 10, 50, 50]}]},
         auto_labels={"objects": [{"class": "vehicle", "bbox": [10, 10, 50, 50]}]},
-        status=AnnotationStatus.PENDING, quality_score=0.8,
+        status=AnnotationStatus.PENDING,
+        quality_score=0.8,
         annotator_id=annotator_id,
     )
     db.add(ann)
@@ -118,9 +116,7 @@ async def test_submit_labels_wrong_annotator_rejected(db_session):
             quality_score=0.95,
         )
 
-    result = await db_session.execute(
-        select(Annotation).where(Annotation.id == ann.id)
-    )
+    result = await db_session.execute(select(Annotation).where(Annotation.id == ann.id))
     ann_check = result.scalar_one()
     assert ann_check.annotator_id == correct_annotator.id
 
@@ -146,11 +142,16 @@ async def test_leaderboard_aggregation(db_session):
     now = datetime.now(UTC)
     for i in range(5):
         ann = Annotation(
-            id=uuid4(), batch_id=batch.id, image_index=i,
-            image_path=f"/images/{i:03d}.jpg", thumbnail_path=f"/thumbs/{i:03d}.jpg",
-            detected_objects={"objects": []}, auto_labels={"objects": []},
+            id=uuid4(),
+            batch_id=batch.id,
+            image_index=i,
+            image_path=f"/images/{i:03d}.jpg",
+            thumbnail_path=f"/thumbs/{i:03d}.jpg",
+            detected_objects={"objects": []},
+            auto_labels={"objects": []},
             human_labels={"objects": [{"class": "vehicle", "bbox": [10, 10, 50, 50]}]},
-            status=AnnotationStatus.QA_REVIEW, quality_score=0.9,
+            status=AnnotationStatus.QA_REVIEW,
+            quality_score=0.9,
             iaa_score=0.85,
             annotator_id=annotator.id,
             review_completed_at=now - timedelta(hours=i),
@@ -162,7 +163,9 @@ async def test_leaderboard_aggregation(db_session):
     assert len(leaderboard) >= 1, f"Expected at least 1 leaderboard entry, got {len(leaderboard)}"
 
     entry = next((e for e in leaderboard if str(e.annotator_id) == str(annotator.id)), None)
-    assert entry is not None, f"Annotator {annotator.id} not found in leaderboard: {[str(e.annotator_id) for e in leaderboard]}"
+    assert entry is not None, (
+        f"Annotator {annotator.id} not found in leaderboard: {[str(e.annotator_id) for e in leaderboard]}"
+    )
     assert entry.total_annotated >= 5
     assert entry.avg_quality_score > 0
 

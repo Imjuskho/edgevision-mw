@@ -24,19 +24,13 @@ class DeployedModel(StorageKeyMixin, TimestampMixin, Base):
         ForeignKey("training_jobs.id", ondelete="CASCADE"), nullable=False, index=True
     )
     model_name: Mapped[str] = mapped_column(String(150), nullable=False)
-    model_type: Mapped[ModelType] = mapped_column(
-        Enum(ModelType, native_enum=False), nullable=False, index=True
-    )
+    model_type: Mapped[ModelType] = mapped_column(Enum(ModelType, native_enum=False), nullable=False, index=True)
     version: Mapped[str] = mapped_column(String(20), nullable=False)
     dataset_id: Mapped[str] = mapped_column(String(100), nullable=False)
     artifact_path: Mapped[str] = mapped_column(String(500), nullable=False)
-    format: Mapped[ModelFormat] = mapped_column(
-        String(20), nullable=False, default=ModelFormat.ULTRALYTICS
-    )
+    format: Mapped[ModelFormat] = mapped_column(String(20), nullable=False, default=ModelFormat.ULTRALYTICS)
     accuracy: Mapped[float | None] = mapped_column(Float, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    deployed_by: Mapped[UUID | None] = mapped_column(
-        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
-    )
+    deployed_by: Mapped[UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     deployed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     notes: Mapped[str | None] = mapped_column(String(500), nullable=True)

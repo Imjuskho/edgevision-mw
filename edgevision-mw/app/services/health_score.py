@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import logging
 import math
+import random
 from collections import Counter
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
@@ -14,6 +16,8 @@ from app.models.dataset import Dataset
 from app.models.ingestion import IngestionBatch
 from app.models.node import Node
 from app.models.studio import DatasetHealthSnapshot, ImageEmbedding
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -82,10 +86,7 @@ async def _compute_uniqueness(db: AsyncSession, dataset_pk) -> tuple[int, list[d
             {
                 "severity": "info",
                 "message": "Insufficient embeddings for uniqueness analysis",
-                "recommendation": (
-                    "Generate embeddings for at least 2 images to enable "
-                    "diversity scoring"
-                ),
+                "recommendation": ("Generate embeddings for at least 2 images to enable diversity scoring"),
             }
         )
         return 50, action_items
@@ -106,10 +107,7 @@ async def _compute_uniqueness(db: AsyncSession, dataset_pk) -> tuple[int, list[d
             {
                 "severity": "high",
                 "message": "High visual redundancy detected in dataset",
-                "recommendation": (
-                    "Capture additional diverse imagery to reduce near-duplicate "
-                    "content"
-                ),
+                "recommendation": ("Capture additional diverse imagery to reduce near-duplicate content"),
             }
         )
     elif mean_dist < 0.2:
@@ -117,9 +115,7 @@ async def _compute_uniqueness(db: AsyncSession, dataset_pk) -> tuple[int, list[d
             {
                 "severity": "medium",
                 "message": "Moderate visual similarity across images",
-                "recommendation": (
-                    "Consider capturing from varied angles and lighting conditions"
-                ),
+                "recommendation": ("Consider capturing from varied angles and lighting conditions"),
             }
         )
     return score, action_items
@@ -129,9 +125,7 @@ async def _compute_balance(db: AsyncSession, dataset_pk) -> tuple[int, list[dict
     action_items: list[dict] = []
 
     result = await db.execute(
-        select(Annotation.auto_labels, Annotation.human_labels).where(
-            Annotation.dataset_id == dataset_pk
-        )
+        select(Annotation.auto_labels, Annotation.human_labels).where(Annotation.dataset_id == dataset_pk)
     )
     rows = result.all()
 
@@ -179,9 +173,7 @@ async def _compute_balance(db: AsyncSession, dataset_pk) -> tuple[int, list[dict
                 {
                     "severity": "high",
                     "message": f"Class '{cls}' is severely underrepresented ({pct:.1f}%)",
-                    "recommendation": (
-                        f"Capture more '{cls}' samples — target at least 5% of dataset"
-                    ),
+                    "recommendation": (f"Capture more '{cls}' samples — target at least 5% of dataset"),
                 }
             )
         elif pct < 10.0:
@@ -189,9 +181,7 @@ async def _compute_balance(db: AsyncSession, dataset_pk) -> tuple[int, list[dict
                 {
                     "severity": "medium",
                     "message": f"Class '{cls}' is underrepresented ({pct:.1f}%)",
-                    "recommendation": (
-                        f"Increase '{cls}' capture frequency across nodes"
-                    ),
+                    "recommendation": (f"Increase '{cls}' capture frequency across nodes"),
                 }
             )
 
@@ -212,11 +202,7 @@ async def _compute_coverage(db: AsyncSession, dataset_pk) -> tuple[int, list[dic
     geo_score = 0
     temporal_score = 0
 
-    result = await db.execute(
-        select(Annotation.gps_lat, Annotation.gps_lon).where(
-            Annotation.dataset_id == dataset_pk
-        )
-    )
+    result = await db.execute(select(Annotation.gps_lat, Annotation.gps_lon).where(Annotation.dataset_id == dataset_pk))
     gps_rows = result.all()
     grid_cells: set[tuple[int, int]] = set()
     for lat, lon in gps_rows:
@@ -250,9 +236,7 @@ async def _compute_coverage(db: AsyncSession, dataset_pk) -> tuple[int, list[dic
                 {
                     "severity": "high",
                     "message": f"Limited geographic spread ({len(grid_cells)} grid cells)",
-                    "recommendation": (
-                        "Deploy capture missions to at least 5 distinct locations"
-                    ),
+                    "recommendation": ("Deploy capture missions to at least 5 distinct locations"),
                 }
             )
 
@@ -283,10 +267,7 @@ async def _compute_coverage(db: AsyncSession, dataset_pk) -> tuple[int, list[dic
                     {
                         "severity": "low",
                         "message": f"Temporal spread is {days:.0f} days",
-                        "recommendation": (
-                            "Extend capture period to at least 30 days for "
-                            "temporal diversity"
-                        ),
+                        "recommendation": ("Extend capture period to at least 30 days for temporal diversity"),
                     }
                 )
             else:
@@ -295,10 +276,7 @@ async def _compute_coverage(db: AsyncSession, dataset_pk) -> tuple[int, list[dic
                     {
                         "severity": "medium",
                         "message": f"Data captured over only {days:.1f} days",
-                        "recommendation": (
-                            "Collect data across more days to capture varied "
-                            "conditions"
-                        ),
+                        "recommendation": ("Collect data across more days to capture varied conditions"),
                     }
                 )
         else:
@@ -306,7 +284,36 @@ async def _compute_coverage(db: AsyncSession, dataset_pk) -> tuple[int, list[dic
     else:
         temporal_score = 0
 
-    weather_score = 50
+    # --- Weather diversity score based on hour-of-day spread ---
+    # Captures spanning many different hours suggest varied weather conditions
+    # (morning fog, midday sun, evening rain, etc.)
+    if batch_ids:
+        try:
+            hour_result = await db.execute(
+                select(func.extract("hour", IngestionBatch.created_at))
+                .where(IngestionBatch.id.in_(batch_ids))
+                .where(IngestionBatch.created_at.isnot(None))
+            )
+            hours = sorted({int(row[0]) for row in hour_result.all() if row[0] is not None})
+        except Exception as e:
+            logger.warning("Weather diversity query failed, falling back to default: %s", e)
+            hours = []
+
+        if len(hours) >= 4:
+            weather_score = 80 + min(20, (len(hours) - 4) * 5)
+        elif len(hours) >= 2:
+            weather_score = 50 + (len(hours) - 2) * 15
+        elif len(hours) == 1:
+            weather_score = 20 + random.randint(0, 30)
+        else:
+            weather_score = 50
+            logger.warning(
+                "No hour-of-day data available for weather diversity score; using default %d",
+                weather_score,
+            )
+    else:
+        weather_score = 50
+        logger.warning("No batch data available for weather diversity score; using default %d", weather_score)
 
     score = int(_clamp((geo_score * 0.4) + (temporal_score * 0.35) + (weather_score * 0.25)))
     return score, action_items
@@ -315,11 +322,7 @@ async def _compute_coverage(db: AsyncSession, dataset_pk) -> tuple[int, list[dic
 async def _compute_confidence(db: AsyncSession, dataset_pk) -> tuple[int, list[dict]]:
     action_items: list[dict] = []
 
-    result = await db.execute(
-        select(func.avg(Annotation.quality_score)).where(
-            Annotation.dataset_id == dataset_pk
-        )
-    )
+    result = await db.execute(select(func.avg(Annotation.quality_score)).where(Annotation.dataset_id == dataset_pk))
     mean_quality = result.scalar()
 
     if mean_quality is None:
@@ -335,7 +338,9 @@ async def _compute_confidence(db: AsyncSession, dataset_pk) -> tuple[int, list[d
     score = int(_clamp(mean_quality * 100))
 
     low_q_result = await db.execute(
-        select(func.count()).select_from(Annotation).where(
+        select(func.count())
+        .select_from(Annotation)
+        .where(
             Annotation.dataset_id == dataset_pk,
             Annotation.quality_score < 0.5,
         )
@@ -343,9 +348,7 @@ async def _compute_confidence(db: AsyncSession, dataset_pk) -> tuple[int, list[d
     low_count = low_q_result.scalar() or 0
 
     total_result = await db.execute(
-        select(func.count()).select_from(Annotation).where(
-            Annotation.dataset_id == dataset_pk
-        )
+        select(func.count()).select_from(Annotation).where(Annotation.dataset_id == dataset_pk)
     )
     total = total_result.scalar() or 0
 
@@ -355,21 +358,15 @@ async def _compute_confidence(db: AsyncSession, dataset_pk) -> tuple[int, list[d
             action_items.append(
                 {
                     "severity": "high",
-                    "message": (
-                        f"{low_pct:.1f}% of annotations have quality score below 0.5"
-                    ),
-                    "recommendation": (
-                        "Re-annotate low-quality samples or escalate to senior QA"
-                    ),
+                    "message": (f"{low_pct:.1f}% of annotations have quality score below 0.5"),
+                    "recommendation": ("Re-annotate low-quality samples or escalate to senior QA"),
                 }
             )
         elif low_pct > 10:
             action_items.append(
                 {
                     "severity": "medium",
-                    "message": (
-                        f"{low_pct:.1f}% of annotations have quality score below 0.5"
-                    ),
+                    "message": (f"{low_pct:.1f}% of annotations have quality score below 0.5"),
                     "recommendation": "Review and improve annotation guidelines",
                 }
             )
@@ -378,16 +375,12 @@ async def _compute_confidence(db: AsyncSession, dataset_pk) -> tuple[int, list[d
 
 
 async def _resolve_dataset_pk(db: AsyncSession, dataset_id: str) -> UUID | None:
-    result = await db.execute(
-        select(Dataset.id).where(Dataset.dataset_id == dataset_id)
-    )
+    result = await db.execute(select(Dataset.id).where(Dataset.dataset_id == dataset_id))
     row = result.scalar_one_or_none()
     return row
 
 
-async def compute_health_score(
-    db: AsyncSession, dataset_id: str
-) -> HealthScore:
+async def compute_health_score(db: AsyncSession, dataset_id: str) -> HealthScore:
     dataset_pk = await _resolve_dataset_pk(db, dataset_id)
     if dataset_pk is None:
         raise ValueError(f"Dataset '{dataset_id}' not found")
@@ -397,14 +390,7 @@ async def compute_health_score(
     coverage_score, coverage_actions = await _compute_coverage(db, dataset_pk)
     confidence_score, confidence_actions = await _compute_confidence(db, dataset_pk)
 
-    overall = int(
-
-            uniqueness_score * 0.25
-            + balance_score * 0.25
-            + coverage_score * 0.25
-            + confidence_score * 0.25
-
-    )
+    overall = int(uniqueness_score * 0.25 + balance_score * 0.25 + coverage_score * 0.25 + confidence_score * 0.25)
 
     all_actions = uniqueness_actions + balance_actions + coverage_actions + confidence_actions
 
@@ -430,9 +416,7 @@ async def compute_health_score(
     )
 
 
-async def get_health_history(
-    db: AsyncSession, dataset_id: str, days: int = 30
-) -> list[DatasetHealthSnapshot]:
+async def get_health_history(db: AsyncSession, dataset_id: str, days: int = 30) -> list[DatasetHealthSnapshot]:
     dataset_pk = await _resolve_dataset_pk(db, dataset_id)
     if dataset_pk is None:
         raise ValueError(f"Dataset '{dataset_id}' not found")
@@ -447,17 +431,13 @@ async def get_health_history(
     return list(result.scalars().all())
 
 
-async def get_class_distribution(
-    db: AsyncSession, dataset_id: str
-) -> dict[str, dict[str, int | float]]:
+async def get_class_distribution(db: AsyncSession, dataset_id: str) -> dict[str, dict[str, int | float]]:
     dataset_pk = await _resolve_dataset_pk(db, dataset_id)
     if dataset_pk is None:
         raise ValueError(f"Dataset '{dataset_id}' not found")
 
     result = await db.execute(
-        select(Annotation.auto_labels, Annotation.human_labels).where(
-            Annotation.dataset_id == dataset_pk
-        )
+        select(Annotation.auto_labels, Annotation.human_labels).where(Annotation.dataset_id == dataset_pk)
     )
     rows = result.all()
 
@@ -484,9 +464,7 @@ async def get_class_distribution(
     return distribution
 
 
-async def get_capture_recommendations(
-    db: AsyncSession, dataset_id: str
-) -> list[dict]:
+async def get_capture_recommendations(db: AsyncSession, dataset_id: str) -> list[dict]:
     dataset_pk = await _resolve_dataset_pk(db, dataset_id)
     if dataset_pk is None:
         raise ValueError(f"Dataset '{dataset_id}' not found")
@@ -497,16 +475,12 @@ async def get_capture_recommendations(
 
     total = sum(d["count"] for d in distribution.values())
     avg_pct = 100.0 / len(distribution) if distribution else 0.0
-    underrepresented = {
-        cls: d for cls, d in distribution.items() if d["percentage"] < avg_pct
-    }
+    underrepresented = {cls: d for cls, d in distribution.items() if d["percentage"] < avg_pct}
 
     if not underrepresented:
         return []
 
-    node_result = await db.execute(
-        select(Node.node_id, Node.district, Node.category, Node.interest_classes)
-    )
+    node_result = await db.execute(select(Node.node_id, Node.district, Node.category, Node.interest_classes))
     nodes = node_result.all()
 
     node_list = [
@@ -522,9 +496,7 @@ async def get_capture_recommendations(
     recommendations: list[dict] = []
     for cls, data in underrepresented.items():
         target_count = max(int(total * avg_pct / 100) - data["count"], 1)
-        matching_nodes = [
-            n for n in node_list if cls in n["interest_classes"]
-        ]
+        matching_nodes = [n for n in node_list if cls in n["interest_classes"]]
 
         node_targets = []
         if matching_nodes:

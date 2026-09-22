@@ -28,6 +28,7 @@ studio_ai_router = APIRouter(prefix="/studio", tags=["studio-ai"])
 
 # ─── Request / Response Models ───
 
+
 class PointPrompt(BaseModel):
     x: float = Field(..., ge=0, le=1, description="Normalized x coordinate")
     y: float = Field(..., ge=0, le=1, description="Normalized y coordinate")
@@ -69,6 +70,7 @@ class AIAssistResponse(BaseModel):
 
 # ─── Endpoints ───
 
+
 @studio_ai_router.post("/label/ai-assist", response_model=AIAssistResponse)
 async def ai_assist(
     request: AIAssistRequest,
@@ -88,6 +90,7 @@ async def ai_assist(
     if pil_image.mode != "RGB":
         pil_image = pil_image.convert("RGB")
     import numpy as np
+
     image_np = np.array(pil_image)
 
     start = time.perf_counter()
@@ -106,13 +109,16 @@ async def ai_assist(
             if la.is_loaded():
                 raw = la.detect(image_np, conf_threshold=0.35)
                 for det in raw:
-                    annotations.append(AIAnnotation(
-                        class_name=det.get("class_name", det.get("taxonomy", "object")),
-                        confidence=_clamp_confidence(det.get("confidence", 0.0)),
-                        bbox=det.get("bbox", [0.0, 0.0, 1.0, 1.0]),
-                        polygon=_mask_to_polygon(det.get("mask"), pil_image.width, pil_image.height)
-                        if request.return_polygons and det.get("mask") is not None else None,
-                    ))
+                    annotations.append(
+                        AIAnnotation(
+                            class_name=det.get("class_name", det.get("taxonomy", "object")),
+                            confidence=_clamp_confidence(det.get("confidence", 0.0)),
+                            bbox=det.get("bbox", [0.0, 0.0, 1.0, 1.0]),
+                            polygon=_mask_to_polygon(det.get("mask"), pil_image.width, pil_image.height)
+                            if request.return_polygons and det.get("mask") is not None
+                            else None,
+                        )
+                    )
                 if annotations:
                     model_used = "locate_anything"
 
@@ -142,12 +148,14 @@ async def ai_assist(
             mask = yolo_mask or _heuristic_point_mask(image_np, px, py)
             crop = _extract_masked_crop(image_np, mask)
             result = yolo.classify(crop)
-            annotations.append(AIAnnotation(
-                class_name=result["class_name"],
-                confidence=_clamp_confidence(result["confidence"]),
-                bbox=_mask_to_bbox(mask),
-                polygon=_mask_to_polygon(mask, pil_image.width, pil_image.height),
-            ))
+            annotations.append(
+                AIAnnotation(
+                    class_name=result["class_name"],
+                    confidence=_clamp_confidence(result["confidence"]),
+                    bbox=_mask_to_bbox(mask),
+                    polygon=_mask_to_polygon(mask, pil_image.width, pil_image.height),
+                )
+            )
             model_used = f"yolov8-seg+{base_model_used}" if yolo_mask is not None else f"heuristic+{base_model_used}"
 
         elif request.prompt_type == "box":
@@ -160,12 +168,14 @@ async def ai_assist(
             mask = yolo_mask or _heuristic_box_mask(image_np, x1, y1, x2, y2)
             crop = _extract_masked_crop(image_np, mask)
             result = yolo.classify(crop)
-            annotations.append(AIAnnotation(
-                class_name=result["class_name"],
-                confidence=_clamp_confidence(result["confidence"]),
-                bbox=_mask_to_bbox(mask),
-                polygon=_mask_to_polygon(mask, pil_image.width, pil_image.height),
-            ))
+            annotations.append(
+                AIAnnotation(
+                    class_name=result["class_name"],
+                    confidence=_clamp_confidence(result["confidence"]),
+                    bbox=_mask_to_bbox(mask),
+                    polygon=_mask_to_polygon(mask, pil_image.width, pil_image.height),
+                )
+            )
             model_used = f"yolov8-seg+{base_model_used}" if yolo_mask is not None else f"heuristic+{base_model_used}"
 
     except ImportError:
@@ -242,6 +252,7 @@ async def classify_image(
         raise HTTPException(status_code=500, detail=f"Image fetch failed: {exc}")
 
     import numpy as np
+
     image_np = np.array(pil_image)
 
     model_type = ModelType(request.model_type)
@@ -283,9 +294,7 @@ async def model_health(
     """List all active deployed models and their load status."""
     from app.models.deployed_model import DeployedModel
 
-    result = await db.execute(
-        select(DeployedModel).where(DeployedModel.is_active.is_(True))
-    )
+    result = await db.execute(select(DeployedModel).where(DeployedModel.is_active.is_(True)))
     models = result.scalars().all()
 
     statuses = []
@@ -295,16 +304,18 @@ async def model_health(
             loaded = engine.is_loaded()
         except Exception:
             loaded = False
-        statuses.append({
-            "id": str(m.id),
-            "model_name": m.model_name,
-            "model_type": m.model_type.value,
-            "version": m.version,
-            "format": m.format.value,
-            "is_loaded": loaded,
-            "artifact_path": m.artifact_path,
-            "deployed_at": m.deployed_at.isoformat() if m.deployed_at else None,
-        })
+        statuses.append(
+            {
+                "id": str(m.id),
+                "model_name": m.model_name,
+                "model_type": m.model_type.value,
+                "version": m.version,
+                "format": m.format.value,
+                "is_loaded": loaded,
+                "artifact_path": m.artifact_path,
+                "deployed_at": m.deployed_at.isoformat() if m.deployed_at else None,
+            }
+        )
 
     return {"models": statuses, "count": len(statuses)}
 
@@ -324,6 +335,7 @@ async def ai_assist_batch(
 
 
 # ─── Helpers ───
+
 
 def _clamp_confidence(conf: float) -> float:
     """Defensive clamp for AIAnnotation confidence field."""
@@ -356,7 +368,7 @@ def _heuristic_box_mask(image_np, x1: int, y1: int, x2: int, y2: int):
 
     h, w = image_np.shape[:2]
     mask = np.zeros((h, w), dtype=np.float32)
-    mask[max(0, y1):min(h, y2), max(0, x1):min(w, x2)] = 1.0
+    mask[max(0, y1) : min(h, y2), max(0, x1) : min(w, x2)] = 1.0
     return mask
 
 
@@ -465,6 +477,7 @@ async def _load_image(request: AIAssistRequest, db: AsyncSession):
 
         mc = await get_minio_client()
         from app.core.config import settings
+
         try:
             response = mc.get_object(settings.MINIO_BUCKET, image_path)
             return Image.open(io.BytesIO(response.read()))
@@ -486,6 +499,7 @@ async def _load_image(request: AIAssistRequest, db: AsyncSession):
 def _mask_to_bbox(mask) -> list[float]:
     """Convert binary mask to normalized bbox [x, y, w, h]."""
     import numpy as np
+
     rows = np.any(mask, axis=1)
     cols = np.any(mask, axis=0)
     if not rows.any() or not cols.any():

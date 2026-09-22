@@ -8,22 +8,7 @@ import pytest
 from app.models.enums import BatchStatus, NodeCategory, NodeStatus, PIIMode
 from app.models.node import Node
 from app.services.ingestion import receive_batch, validate_batch
-
-
-async def _create_node(db):
-    node = Node(
-        id=uuid4(), node_id=f"ING-{uuid4().hex[:8]}",
-        district="Blantyre", latitude=-15.7861, longitude=35.0058,
-        category=NodeCategory.ROAD, hardware_profile={"gpu": "jetson"},
-        network_config={"apn": "airtel"}, capture_schedule="*/10 * * * *",
-        interest_classes=["vehicle"], pii_mode=PIIMode.STRICT,
-        firmware_version="1.0.0", public_key=b"\x01" * 32,
-        status=NodeStatus.ONLINE, is_enabled=True,
-    )
-    db.add(node)
-    await db.commit()
-    await db.refresh(node)
-    return node
+from tests.conftest import _create_node
 
 
 @pytest.mark.asyncio
@@ -169,6 +154,7 @@ async def test_dispatch_failure_writes_audit_log_and_error_log(db_session, capsy
 
     # (b) Audit log entry exists with the correct event_type for this batch
     from sqlalchemy import select as sel
+
     result = await db_session.execute(
         sel(AuditLog).where(
             AuditLog.event_type == "BATCH_DISPATCH_FAILED",

@@ -58,7 +58,9 @@ export function useRoadSegmentation(): UseRoadSegmentationReturn {
         axiosDetail ??
         (err instanceof Error ? err.message : "Road segmentation API call failed");
       setError(msg);
-      throw new Error(msg);
+      const wrapped = new Error(msg);
+      (wrapped as Error & { cause?: unknown }).cause = err;
+      throw wrapped;
     } finally {
       setIsSegmenting(false);
     }

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { Canvas, Rect, Polygon, Point, FabricImage, FabricText, ActiveSelection, util, type TPointerEventInfo } from "fabric";
 import type { BBox } from "../types";
 import { getCategoryColor, getCategoryForLabel, ALL_LABELS } from "../constants/taxonomy";
@@ -74,6 +75,7 @@ export default function AnnotationCanvas({
   taxonomyContext = "road",
   drawTool = "bbox",
 }: Props) {
+  const { t } = useTranslation();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const fabricRef = useRef<Canvas | null>(null);
@@ -408,7 +410,7 @@ export default function AnnotationCanvas({
   );
 
   const handleMouseUp = useCallback(
-    (_opt: TPointerEventInfo) => {
+    () => {
       if (drawTool === "polygon") return;
       if (!drawingRef.current) return;
       drawingRef.current = false;
@@ -502,7 +504,11 @@ export default function AnnotationCanvas({
   return (
     <div className="annotation-canvas" ref={containerRef}>
       <FabricZoomRegistrar api={zoomApi} />
-      <canvas ref={canvasRef} />
+      <canvas
+        ref={canvasRef}
+        role="img"
+        aria-label={t("annotate.canvasAriaLabel", "Annotation canvas. Use keyboard shortcuts to draw boxes and polygons.")}
+      />
       {editPopup && (
         <div
           ref={popupRef}
@@ -514,7 +520,7 @@ export default function AnnotationCanvas({
               autoFocus
               type="text"
               className="annotation-edit-search"
-              placeholder="Search label..."
+              placeholder={t("annotate.searchLabel")}
               value={editPopup.search}
               onChange={(e) => setEditPopup({ ...editPopup, search: e.target.value })}
               onKeyDown={(e) => {
@@ -525,7 +531,7 @@ export default function AnnotationCanvas({
           </div>
           <div className="annotation-edit-list">
             {filteredLabels.length === 0 && (
-              <div className="annotation-edit-empty">No matches</div>
+              <div className="annotation-edit-empty">{t("annotate.noMatches", "No matches")}</div>
             )}
             {filteredLabels.map((item) => (
               <button
@@ -541,16 +547,16 @@ export default function AnnotationCanvas({
             ))}
           </div>
           <div className="annotation-edit-footer">
-            Esc to close · {filteredLabels.length} labels
+            {t("annotate.escToClose", "Esc to close")} · {t("annotate.labelCount", "{{count}} labels", { count: filteredLabels.length })}
           </div>
         </div>
       )}
       <div className="annotation-canvas-hint">
         {drawTool === "polygon"
-          ? "Click to add vertices · Double-click to close polygon · Delete to remove selected"
-          : "Click/drag to draw · Double-click box to edit label · Shift+click to multi-select · Delete/Backspace to remove"}{" "}
-        · Scroll to zoom · Space+drag or middle-click to pan ·{" "}
-        | {boxes.length} annotations
+          ? t("annotate.hintPolygon", "Click to add vertices · Double-click to close polygon · Delete to remove selected")
+          : t("annotate.hintBbox", "Click/drag to draw · Double-click box to edit label · Shift+click to multi-select · Delete/Backspace to remove")}{" "}
+        · {t("annotate.zoomPanHint", "Scroll to zoom · Space+drag or middle-click to pan")} ·{" "}
+        | {t("annotate.annotationCount", "{{count}} annotations", { count: boxes.length })}
       </div>
     </div>
   );

@@ -68,9 +68,7 @@ async def list_models(
     return DeployedModelListResponse.create([_map_model(m) for m in rows], total, page, page_size)
 
 
-@model_registry_router.post(
-    "/deploy", response_model=DeployedModelResponse, status_code=status.HTTP_201_CREATED
-)
+@model_registry_router.post("/deploy", response_model=DeployedModelResponse, status_code=status.HTTP_201_CREATED)
 async def deploy_model(
     body: DeployModelRequest,
     user: dict = Depends(require_role(["ADMIN", "OPERATOR"])),
@@ -98,9 +96,7 @@ async def deploy_model(
         )
 
     existing_count = (
-        await db.execute(
-            select(func.count(DeployedModel.id)).where(DeployedModel.model_type == job.model_type)
-        )
+        await db.execute(select(func.count(DeployedModel.id)).where(DeployedModel.model_type == job.model_type))
     ).scalar_one()
     version = f"v{existing_count + 1}"
 
@@ -146,9 +142,7 @@ async def activate_model(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Deployed model not found")
 
     result = await db.execute(
-        select(DeployedModel)
-        .where(DeployedModel.model_type == target.model_type)
-        .with_for_update()
+        select(DeployedModel).where(DeployedModel.model_type == target.model_type).with_for_update()
     )
     siblings = result.scalars().all()
     for m in siblings:

@@ -13,9 +13,16 @@ class StorageKeyMixin:
     """
 
     PATH_COLUMNS = {
-        "image_path", "thumbnail_path", "storage_key", "thumbnail_key",
-        "artifact_path", "storage_path", "output_path", "file_path",
-        "export_path", "model_path",
+        "image_path",
+        "thumbnail_path",
+        "storage_key",
+        "thumbnail_key",
+        "artifact_path",
+        "storage_path",
+        "output_path",
+        "file_path",
+        "export_path",
+        "model_path",
     }
 
     @validates(*PATH_COLUMNS)

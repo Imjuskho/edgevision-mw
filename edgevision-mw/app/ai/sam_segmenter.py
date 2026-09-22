@@ -30,17 +30,11 @@ def _find_model(kind: str) -> Path | None:
     if kind == "encoder":
         if settings.SAM_ENCODER_ONNX_PATH:
             candidates.append(Path(settings.SAM_ENCODER_ONNX_PATH))
-        candidates.append(
-            Path(__file__).resolve().parents[2]
-            / "frontend/public/models/mobile_sam_encoder.onnx"
-        )
+        candidates.append(Path(__file__).resolve().parents[2] / "frontend/public/models/mobile_sam_encoder.onnx")
     else:
         if settings.SAM_DECODER_ONNX_PATH:
             candidates.append(Path(settings.SAM_DECODER_ONNX_PATH))
-        candidates.append(
-            Path(__file__).resolve().parents[2]
-            / "frontend/public/models/mobile_sam_decoder.onnx"
-        )
+        candidates.append(Path(__file__).resolve().parents[2] / "frontend/public/models/mobile_sam_decoder.onnx")
     for p in candidates:
         if p.exists():
             return p
@@ -92,12 +86,8 @@ class SAMSegmenter:
         try:
             import onnxruntime as ort
 
-            providers = [
-                p for p in ("CPUExecutionProvider",) if p in ort.get_available_providers()
-            ]
-            self._encoder_session = ort.InferenceSession(
-                str(self._encoder_path), providers=providers
-            )
+            providers = [p for p in ("CPUExecutionProvider",) if p in ort.get_available_providers()]
+            self._encoder_session = ort.InferenceSession(str(self._encoder_path), providers=providers)
             self._encoder_input_name = self._encoder_session.get_inputs()[0].name
             self._encoder_output_name = self._encoder_session.get_outputs()[0].name
         except Exception as exc:
@@ -108,9 +98,7 @@ class SAMSegmenter:
         try:
             import onnxruntime as ort
 
-            self._decoder_session = ort.InferenceSession(
-                str(self._decoder_path), providers=providers
-            )
+            self._decoder_session = ort.InferenceSession(str(self._decoder_path), providers=providers)
             for inp in self._decoder_session.get_inputs():
                 name = inp.name.lower()
                 for token in (
@@ -234,9 +222,7 @@ class SAMSegmenter:
             masks = masks[0]
         return masks  # [N, 256, 256]
 
-    def _postprocess(
-        self, low_res_masks: np.ndarray, _image: np.ndarray, orig_size: tuple[int, int]
-    ) -> np.ndarray:
+    def _postprocess(self, low_res_masks: np.ndarray, _image: np.ndarray, orig_size: tuple[int, int]) -> np.ndarray:
         import cv2
 
         h, w = orig_size
@@ -261,9 +247,7 @@ class SAMSegmenter:
             logger.warning("sam_predict_point_failed", error=str(exc))
             return self._heuristic_point(image, x, y)
 
-    def predict_box(
-        self, image: np.ndarray, x1: int, y1: int, x2: int, y2: int
-    ) -> np.ndarray:
+    def predict_box(self, image: np.ndarray, x1: int, y1: int, x2: int, y2: int) -> np.ndarray:
         if not self._loaded:
             return self._heuristic_box(image, x1, y1, x2, y2)
         h, w = image.shape[:2]
@@ -299,7 +283,7 @@ class SAMSegmenter:
     def _heuristic_box(self, image: np.ndarray, x1: int, y1: int, x2: int, y2: int) -> np.ndarray:
         h, w = image.shape[:2]
         mask = np.zeros((h, w), dtype=np.float32)
-        mask[max(0, y1):min(h, y2), max(0, x1):min(w, x2)] = 1.0
+        mask[max(0, y1) : min(h, y2), max(0, x1) : min(w, x2)] = 1.0
         return mask
 
 

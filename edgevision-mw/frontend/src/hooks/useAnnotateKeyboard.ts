@@ -10,6 +10,8 @@ interface UseAnnotateKeyboardOptions {
   onNext: () => void;
   onPrev: () => void;
   onNextUnlabeled?: () => void;
+  onUndo?: () => void;
+  onRedo?: () => void;
 }
 
 export function useAnnotateKeyboard({
@@ -20,6 +22,8 @@ export function useAnnotateKeyboard({
   onNext,
   onPrev,
   onNextUnlabeled,
+  onUndo,
+  onRedo,
 }: UseAnnotateKeyboardOptions) {
   const applyClassByIndex = useCallback(
     (index: number) => {
@@ -40,6 +44,18 @@ export function useAnnotateKeyboard({
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {
         e.preventDefault();
         onSave();
+        return;
+      }
+
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z" && !e.shiftKey) {
+        e.preventDefault();
+        onUndo?.();
+        return;
+      }
+
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z" && e.shiftKey) {
+        e.preventDefault();
+        onRedo?.();
         return;
       }
 
@@ -68,5 +84,5 @@ export function useAnnotateKeyboard({
 
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [enabled, onSave, onNext, onPrev, onNextUnlabeled, applyClassByIndex]);
+  }, [enabled, onSave, onNext, onPrev, onNextUnlabeled, onUndo, onRedo, applyClassByIndex]);
 }

@@ -23,7 +23,9 @@ def _create_token(user):
 
 @pytest.mark.asyncio
 async def test_live_review_queue_lists_pending_captures(
-    _patch_minio, test_client, db_session,
+    _patch_minio,
+    test_client,
+    db_session,
 ):
     from tests.test_phase7 import _create_user, _make_png_buffer
 

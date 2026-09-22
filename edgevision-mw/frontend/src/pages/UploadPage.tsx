@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { PageShell } from "../components/PageShell";
 import CameraCapture from "../components/CameraCapture";
@@ -58,6 +58,11 @@ export default function UploadPage({
 }: Props) {
   const { t } = useTranslation();
   const [datasetId, setDatasetId] = useState(initialDatasetId || "");
+  const [prevDatasetId, setPrevDatasetId] = useState(initialDatasetId || "");
+  if (initialDatasetId !== prevDatasetId) {
+    setPrevDatasetId(initialDatasetId || "");
+    setDatasetId(initialDatasetId || "");
+  }
   const [files, setFiles] = useState<UploadedFile[]>([]);
   const [dragging, setDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -67,9 +72,6 @@ export default function UploadPage({
     total: number;
   } | null>(null);
 
-  useEffect(() => {
-    setDatasetId(initialDatasetId || "");
-  }, [initialDatasetId]);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const [mode, setMode] = useState<CaptureMode>("file");
@@ -212,7 +214,7 @@ export default function UploadPage({
       });
 
       if (!resp.ok) {
-        let detail = "Upload failed";
+        let detail = t("upload.uploadFailed", "Upload failed. Please try again.");
         try {
           const err = await resp.json();
           detail = err.detail || detail;
@@ -258,7 +260,7 @@ export default function UploadPage({
       });
 
       if (!resp.ok) {
-        let detail = "Upload failed";
+        let detail = t("upload.uploadFailed", "Upload failed. Please try again.");
         try {
           const err = await resp.json();
           detail = err.detail || detail;
@@ -415,16 +417,16 @@ export default function UploadPage({
                   <ProgressBar value={f.progress} aria-label={f.file.name} />
                 )}
                 {f.status === "done" && !f.error && (
-                  <span className="upload-list-status--ok" aria-label="Uploaded">✓</span>
+                  <span className="upload-list-status--ok" aria-label={t("upload.statusUploaded", "Uploaded")}>✓</span>
                 )}
                 {f.status === "done" && f.error && (
                   <span className="upload-list-status--err" title={f.error}>⊘</span>
                 )}
                 {f.status === "error" && (
-                  <span className="upload-list-status--err" aria-label="Error">✗</span>
+                  <span className="upload-list-status--err" aria-label={t("upload.statusError", "Error")}>✗</span>
                 )}
                 {f.status === "pending" && (
-                  <Button variant="ghost" size="sm" onClick={() => removeFile(i)} aria-label="Remove">
+                  <Button variant="ghost" size="sm" onClick={() => removeFile(i)} aria-label={t("upload.removeFile", "Remove")}>
                     ×
                   </Button>
                 )}

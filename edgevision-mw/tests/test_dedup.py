@@ -128,9 +128,7 @@ async def _create_annotations(db, ds, image_paths):
 @pytest.mark.asyncio
 async def test_pass_phash_exact_groups_identical_images(db_session):
     ds = await _create_dataset(db_session)
-    anns = await _create_annotations(
-        db_session, ds, ["dedup/a.jpg", "dedup/b.jpg"]
-    )
+    anns = await _create_annotations(db_session, ds, ["dedup/a.jpg", "dedup/b.jpg"])
     payload = _png_bytes(120)
 
     async def _fake_get(*_args, **_kwargs):
@@ -168,9 +166,7 @@ async def test_pass_phash_exact_distinguishes_different_images(db_session):
 @pytest.mark.asyncio
 async def test_pass_phash_near_groups_identical_images(db_session):
     ds = await _create_dataset(db_session)
-    anns = await _create_annotations(
-        db_session, ds, ["dedup/a.jpg", "dedup/b.jpg"]
-    )
+    anns = await _create_annotations(db_session, ds, ["dedup/a.jpg", "dedup/b.jpg"])
     payload = _png_bytes(120)
 
     async def _fake_get(*_args, **_kwargs):

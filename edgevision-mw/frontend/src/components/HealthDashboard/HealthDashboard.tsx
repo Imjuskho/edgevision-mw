@@ -23,6 +23,27 @@ interface ClassData {
   percentage: number;
 }
 
+interface ClassDistributionEntry {
+  count: number;
+  percentage: number;
+}
+
+async function fetchHealthMetrics(datasetId: string) {
+  const [healthRes, distRes] = await Promise.all([
+    api.get(`/studio/datasets/${datasetId}/health`),
+    api.get(`/studio/datasets/${datasetId}/class-distribution`).catch(() => ({ data: {} })),
+  ]);
+
+  const raw: Record<string, ClassDistributionEntry> = distRes.data;
+  const classDist: ClassData[] = Object.entries(raw).map(([cls, v]) => ({
+    class_name: cls,
+    count: v.count,
+    percentage: v.percentage,
+  }));
+
+  return { health: healthRes.data as HealthScore, classDist };
+}
+
 interface Props {
   datasetId: string;
   onNavigate?: (path: string) => void;
@@ -43,20 +64,9 @@ export const HealthDashboard: React.FC<Props> = ({ datasetId, onNavigate }) => {
     setLoading(true);
     setLoadError(false);
     try {
-      const [healthRes, distRes] = await Promise.all([
-        api.get(`/studio/datasets/${datasetId}/health`),
-        api.get(`/studio/datasets/${datasetId}/class-distribution`).catch(() => ({ data: {} })),
-      ]);
-
-      setHealth(healthRes.data);
-
-      const raw = distRes.data;
-      const dist: ClassData[] = Object.entries(raw).map(([cls, v]: [string, any]) => ({
-        class_name: cls,
-        count: v.count,
-        percentage: v.percentage,
-      }));
-      setClassDist(dist);
+      const { health, classDist } = await fetchHealthMetrics(datasetId);
+      setHealth(health);
+      setClassDist(classDist);
       setLastUpdated(new Date());
     } catch (err) {
       console.error("Failed to load health data:", err);
@@ -69,12 +79,26 @@ export const HealthDashboard: React.FC<Props> = ({ datasetId, onNavigate }) => {
 
   useEffect(() => {
     if (!datasetId) return;
-    loadData();
+    const load = async () => {
+      try {
+        const { health, classDist } = await fetchHealthMetrics(datasetId);
+        setHealth(health);
+        setClassDist(classDist);
+        setLastUpdated(new Date());
+      } catch (err) {
+        console.error("Failed to load health data:", err);
+        setHealth(null);
+        setLoadError(true);
+      } finally {
+        setLoading(false);
+      }
+    };
+    void load();
     const interval = setInterval(() => {
-      if (document.visibilityState !== "hidden") loadData();
+      if (document.visibilityState !== "hidden") void load();
     }, 300000);
     return () => clearInterval(interval);
-  }, [datasetId, loadData, pageVisible]);
+  }, [datasetId, pageVisible]);
 
   if (loading && !health) {
     return (
@@ -153,7 +177,7 @@ export const HealthDashboard: React.FC<Props> = ({ datasetId, onNavigate }) => {
                 ))}
               </Pie>
               <Tooltip
-                formatter={(value, _name, props: any) => [
+                formatter={(value, _name, props) => [
                   `${Number(value).toFixed(1)}% (${props.payload.count} images)`,
                   props.payload.class_name,
                 ]}

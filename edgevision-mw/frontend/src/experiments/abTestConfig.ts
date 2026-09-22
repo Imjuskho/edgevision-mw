@@ -10,7 +10,7 @@ export interface Experiment {
 export interface Variant {
   id: string;
   name: string;
-  config: Record<string, any>;
+  config: Record<string, unknown>;
   weight: number;
 }
 
@@ -105,7 +105,7 @@ interface ExperimentEvent {
   variantId: string;
   userId: string;
   eventType: 'exposed' | 'converted' | 'dismissed';
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
   timestamp: string;
 }
 
@@ -153,7 +153,7 @@ export function useExperiment(experimentId: string, userId: string) {
   const variant = useMemo(() => assignVariant(experimentId, userId), [experimentId, userId]);
 
   const track = useCallback(
-    (eventType: ExperimentEvent['eventType'], metadata?: Record<string, any>) => {
+    (eventType: ExperimentEvent['eventType'], metadata?: Record<string, unknown>) => {
       if (!variant) return;
       trackExperimentEvent({
         experimentId,

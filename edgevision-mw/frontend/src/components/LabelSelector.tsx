@@ -35,6 +35,13 @@ export default function LabelSelector({ value, onChange, taxonomyContext = "road
   const containerRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const [prevSelOpen, setPrevSelOpen] = useState(open);
+  const [prevSearch, setPrevSearch] = useState(search);
+  if (open !== prevSelOpen || search !== prevSearch) {
+    setPrevSelOpen(open);
+    setPrevSearch(search);
+    setFocusedIdx(-1);
+  }
 
   const currentColor = taxonomyContext === "agri" ? "#4CAF50" : getCategoryColor(value);
 
@@ -114,7 +121,6 @@ export default function LabelSelector({ value, onChange, taxonomyContext = "road
 
   useEffect(() => {
     if (open && searchRef.current) searchRef.current.focus();
-    setFocusedIdx(-1);
   }, [open, search]);
 
   useEffect(() => {
@@ -182,7 +188,7 @@ export default function LabelSelector({ value, onChange, taxonomyContext = "road
               ref={searchRef}
               type="text"
               className="label-selector-search"
-              placeholder="Search labels..."
+              placeholder={t("annotate.searchLabels")}
               value={search}
               onChange={(e) => {
                 setSearch(e.target.value);

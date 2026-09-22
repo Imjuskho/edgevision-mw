@@ -24,14 +24,30 @@ CROP_CLASSES: dict[int, AgriClassDef] = {
 
 HEALTH_CLASSES: dict[int, AgriClassDef] = {
     0: {"name": "healthy", "color": "#4CAF50", "description": "Crop in good health, normal growth - no visible stress"},
-    1: {"name": "stressed", "color": "#FF9800", "description": "Mild water/temperature stress - wilting or discoloration"},
+    1: {
+        "name": "stressed",
+        "color": "#FF9800",
+        "description": "Mild water/temperature stress - wilting or discoloration",
+    },
     2: {"name": "diseased", "color": "#F44336", "description": "Fungal, bacterial, or viral infection present"},
-    3: {"name": "pest_infested", "color": "#E91E63", "description": "Insect pest damage - leaf skeletonization, stunting"},
-    4: {"name": "nutrient_deficient", "color": "#FFEB3B", "description": "Chlorosis or stunting from nitrogen/phosphorus deficiency"},
+    3: {
+        "name": "pest_infested",
+        "color": "#E91E63",
+        "description": "Insect pest damage - leaf skeletonization, stunting",
+    },
+    4: {
+        "name": "nutrient_deficient",
+        "color": "#FFEB3B",
+        "description": "Chlorosis or stunting from nitrogen/phosphorus deficiency",
+    },
     5: {"name": "bare_soil", "color": "#795548", "description": "No crop cover - fallow, eroded, or pre-planting"},
     6: {"name": "weed_infestation", "color": "#9C27B0", "description": "Heavy weed competition reducing crop yield"},
     7: {"name": "water_logged", "color": "#2196F3", "description": "Flooded or saturated soil - root oxygen stress"},
-    8: {"name": "drought_stressed", "color": "#795548", "description": "Severe moisture deficit - leaf rolling, browning"},
+    8: {
+        "name": "drought_stressed",
+        "color": "#795548",
+        "description": "Severe moisture deficit - leaf rolling, browning",
+    },
 }
 
 AGRI_TAXONOMY_VERSION = "v1.0"

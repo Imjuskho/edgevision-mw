@@ -1,10 +1,12 @@
 """Tests for GeoPoint and Detection schemas (F1+F2)."""
+
 import pytest
 from pydantic import ValidationError
 
 from app.schemas.common import Detection, GeoPoint
 
 # ── GeoPoint: valid inputs ───────────────────────────────────────────────────
+
 
 def test_geopoint_valid_blantyre():
     gp = GeoPoint(lat=-15.7861, lng=35.0058)
@@ -28,6 +30,7 @@ def test_geopoint_valid_extreme_values():
 
 
 # ── GeoPoint: invalid inputs ─────────────────────────────────────────────────
+
 
 def test_geopoint_zero_origin_rejected():
     with pytest.raises(ValidationError, match="invalid coordinates"):
@@ -63,6 +66,7 @@ def test_geopoint_lng_zero_lat_nonzero_valid():
 
 # ── Detection: valid inputs ──────────────────────────────────────────────────
 
+
 def test_detection_valid_minimal():
     d = Detection(
         class_id=0,
@@ -89,27 +93,28 @@ def test_detection_valid_all_fields():
     assert d.track_id == 42
 
 
-def test_detection_valid_zero_bbox():
-    d = Detection(
-        class_id=1,
-        class_name="VEHICLE",
-        confidence=0.0,
-        bbox=[0.0, 0.0, 0.0, 0.0],
-    )
-    assert d.bbox == [0.0, 0.0, 0.0, 0.0]
+def test_detection_rejects_zero_size_bbox():
+    with pytest.raises(ValidationError):
+        Detection(
+            class_id=1,
+            class_name="VEHICLE",
+            confidence=0.0,
+            bbox=[0.0, 0.0, 0.0, 0.0],
+        )
 
 
-def test_detection_valid_one_bbox():
-    d = Detection(
-        class_id=1,
-        class_name="TRUCK",
-        confidence=0.5,
-        bbox=[1.0, 1.0, 1.0, 1.0],
-    )
-    assert d.bbox == [1.0, 1.0, 1.0, 1.0]
+def test_detection_rejects_out_of_frame_bbox():
+    with pytest.raises(ValidationError):
+        Detection(
+            class_id=1,
+            class_name="TRUCK",
+            confidence=0.5,
+            bbox=[1.0, 1.0, 1.0, 1.0],
+        )
 
 
 # ── Detection: invalid inputs ────────────────────────────────────────────────
+
 
 def test_detection_negative_class_id_rejected():
     with pytest.raises(ValidationError, match="greater than or equal to 0"):
@@ -188,6 +193,7 @@ def test_detection_bbox_negative_value():
 
 
 # ── Detection: from dict (EventPacket use case) ──────────────────────────────
+
 
 def test_detection_from_dict():
     data = {

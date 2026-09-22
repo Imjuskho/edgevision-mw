@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef, useEffect } from "react";
+import React, { useState, useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import api from "../../services/api";
 import { useToast } from "../Toast";
@@ -38,6 +38,16 @@ export const DedupPanel: React.FC<Props> = ({ datasetId, onNavigate }) => {
   const [activeGroupIndex, setActiveGroupIndex] = useState(0);
   const [threshold, setThreshold] = useState(settings.operational.dedupDefaultThreshold);
   const [methods, setMethods] = useState<string[]>(settings.operational.dedupDefaultMethods);
+  const [prevThresholdSetting, setPrevThresholdSetting] = useState(settings.operational.dedupDefaultThreshold);
+  const [prevMethodsSetting, setPrevMethodsSetting] = useState(settings.operational.dedupDefaultMethods);
+  if (settings.operational.dedupDefaultThreshold !== prevThresholdSetting) {
+    setPrevThresholdSetting(settings.operational.dedupDefaultThreshold);
+    setThreshold(settings.operational.dedupDefaultThreshold);
+  }
+  if (settings.operational.dedupDefaultMethods !== prevMethodsSetting) {
+    setPrevMethodsSetting(settings.operational.dedupDefaultMethods);
+    setMethods(settings.operational.dedupDefaultMethods);
+  }
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analyzeProgress, setAnalyzeProgress] = useState(0);
   const [jobId, setJobId] = useState<string | null>(null);
@@ -46,11 +56,6 @@ export const DedupPanel: React.FC<Props> = ({ datasetId, onNavigate }) => {
   const [isEmbedding, setIsEmbedding] = useState(false);
   const [embedProgress, setEmbedProgress] = useState(0);
   const [submitting, setSubmitting] = useState(false);
-
-  useEffect(() => {
-    setThreshold(settings.operational.dedupDefaultThreshold);
-    setMethods(settings.operational.dedupDefaultMethods);
-  }, [settings.operational.dedupDefaultThreshold, settings.operational.dedupDefaultMethods]);
 
   const startAnalysis = async () => {
     setIsAnalyzing(true);

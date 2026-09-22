@@ -25,9 +25,7 @@ async def test_register_prevents_role_escalation(db_session, test_client):
     assert data["role"] == "ANNOTATOR", f"Role escalation prevented: got {data['role']}, expected ANNOTATOR"
 
     await db_session.commit()
-    result = await db_session.execute(
-        select(User).where(User.email == unique_email)
-    )
+    result = await db_session.execute(select(User).where(User.email == unique_email))
     user = result.scalar_one()
     assert user.role == "ANNOTATOR"
 
@@ -53,6 +51,7 @@ async def test_login_returns_valid_jwt(db_session, test_client):
     assert token_data["expires_in"] > 0
 
     from app.core.security import decode_access_token
+
     payload = decode_access_token(token_data["access_token"])
     assert "sub" in payload
     assert "role" in payload

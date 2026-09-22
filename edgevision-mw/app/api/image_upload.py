@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import time
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
@@ -59,10 +60,12 @@ async def upload_images(
         content = await f.read()
         max_size = MAX_FILE_SIZE_BY_TYPE.get(f.content_type, 20 * 1024 * 1024)
         if len(content) > max_size:
-            errors.append({
-                "filename": f.filename,
-                "error": f"File too large (max {max_size // (1024 * 1024)}MB)",
-            })
+            errors.append(
+                {
+                    "filename": f.filename,
+                    "error": f"File too large (max {max_size // (1024 * 1024)}MB)",
+                }
+            )
             continue
 
         checksum = hashlib.sha256(content).hexdigest()
@@ -70,12 +73,14 @@ async def upload_images(
         existing = await _find_duplicate(db, checksum)
         if existing:
             skipped += 1
-            uploaded.append(ImageUploadResponse(
-                filename=f.filename or "unknown",
-                annotation_id=str(existing.id),
-                status="skipped_duplicate",
-                checksum=checksum,
-            ))
+            uploaded.append(
+                ImageUploadResponse(
+                    filename=f.filename or "unknown",
+                    annotation_id=str(existing.id),
+                    status="skipped_duplicate",
+                    checksum=checksum,
+                )
+            )
             continue
 
         ext = _get_extension(f.filename or "image.jpg", f.content_type)
@@ -106,9 +111,11 @@ async def upload_images(
         from app.models.enums import BatchStatus
         from app.models.ingestion import IngestionBatch
 
-        existing_batch = (await db.execute(
-            select(IngestionBatch).where(IngestionBatch.batch_id.startswith(f"UPLOAD-{ds.dataset_id}")).limit(1)
-        )).scalar_one_or_none()
+        existing_batch = (
+            await db.execute(
+                select(IngestionBatch).where(IngestionBatch.batch_id.startswith(f"UPLOAD-{ds.dataset_id}")).limit(1)
+            )
+        ).scalar_one_or_none()
 
         if existing_batch is None:
             batch = IngestionBatch(
@@ -143,12 +150,14 @@ async def upload_images(
         await db.flush()
         next_index += 1
 
-        uploaded.append(ImageUploadResponse(
-            filename=f.filename or "unknown",
-            annotation_id=str(annotation.id),
-            status="uploaded",
-            checksum=checksum,
-        ))
+        uploaded.append(
+            ImageUploadResponse(
+                filename=f.filename or "unknown",
+                annotation_id=str(annotation.id),
+                status="uploaded",
+                checksum=checksum,
+            )
+        )
 
     if ds.status == DatasetStatus.BUILDING and len(uploaded) > 0:
         ds.status = DatasetStatus.READY
@@ -169,6 +178,7 @@ async def upload_images(
 async def _resolve_or_create_dataset(db: AsyncSession, identifier: str) -> Dataset:
     try:
         from uuid import UUID as UUIDType
+
         uid = UUIDType(identifier)
         ds = await db.get(Dataset, uid)
         if ds is not None:
@@ -206,13 +216,12 @@ async def _resolve_or_create_dataset(db: AsyncSession, identifier: str) -> Datas
 
 
 async def _find_duplicate(db: AsyncSession, checksum: str) -> Annotation | None:
-    stmt = select(Annotation).where(
-        Annotation.detected_objects["_checksum"].astext == checksum
-    ).limit(1)
+    stmt = select(Annotation).where(Annotation.detected_objects["_checksum"].astext == checksum).limit(1)
     return (await db.execute(stmt)).scalar_one_or_none()
 
 
-_upload_node_cache = None
+_upload_node_cache: tuple | None = None  # (node_object, timestamp)
+_UPLOAD_NODE_CACHE_TTL = 300  # 5 minutes
 
 
 async def _get_or_create_upload_node(db: AsyncSession):
@@ -220,8 +229,11 @@ async def _get_or_create_upload_node(db: AsyncSession):
     from app.models.enums import NodeCategory, NodeStatus, PIIMode
     from app.models.node import Node
 
+    now = time.time()
     if _upload_node_cache is not None:
-        return _upload_node_cache
+        cached_node, cached_at = _upload_node_cache
+        if now - cached_at < _UPLOAD_NODE_CACHE_TTL:
+            return cached_node
 
     stmt = select(Node).where(Node.node_id == "upload-node").limit(1)
     node = (await db.execute(stmt)).scalar_one_or_none()
@@ -245,11 +257,9 @@ async def _get_or_create_upload_node(db: AsyncSession):
         )
         db.add(node)
         await db.flush()
-        _upload_node_cache = node
-    else:
-        _upload_node_cache = node
 
-    return _upload_node_cache
+    _upload_node_cache = (node, now)
+    return node
 
 
 def _get_extension(filename: str, content_type: str) -> str:

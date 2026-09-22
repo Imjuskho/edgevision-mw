@@ -1,4 +1,5 @@
 """Tests for dataset-level batch inference helpers and API."""
+
 from __future__ import annotations
 
 import json
@@ -417,9 +418,7 @@ class TestJsonSafeBatchWrites:
         assert summary["processed"] == 1
         assert summary["failed"] == 0
 
-        result = await db_session.execute(
-            select(RoadAnnotation).where(RoadAnnotation.annotation_id == ann.id)
-        )
+        result = await db_session.execute(select(RoadAnnotation).where(RoadAnnotation.annotation_id == ann.id))
         ra = result.scalar_one()
         json.dumps(ra.instances)
         inst = ra.instances[0]

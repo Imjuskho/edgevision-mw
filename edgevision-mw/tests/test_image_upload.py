@@ -11,9 +11,7 @@ from PIL import Image
 
 
 @pytest.mark.asyncio
-async def test_image_upload_no_leading_slash(
-    db_session, test_client: AsyncClient, jwt_token_factory
-):
+async def test_image_upload_no_leading_slash(db_session, test_client: AsyncClient, jwt_token_factory):
     reg = await test_client.post(
         "/api/v1/auth/register",
         json={
@@ -29,7 +27,8 @@ async def test_image_upload_no_leading_slash(
     headers = {"Authorization": f"Bearer {token}"}
 
     img = Image.new(
-        "RGB", (100, 100),
+        "RGB",
+        (100, 100),
         color=(random.randint(0, 255), random.randint(0, 255), random.randint(0, 255)),
     )
     buf = io.BytesIO()
@@ -62,9 +61,7 @@ async def test_image_upload_no_leading_slash(
 
 
 @pytest.mark.asyncio
-async def test_image_serve_no_leading_slash(
-    db_session, test_client: AsyncClient, jwt_token_factory, mock_minio
-):
+async def test_image_serve_no_leading_slash(db_session, test_client: AsyncClient, jwt_token_factory, mock_minio):
     mock_minio.get_object.return_value.read.return_value = b"fake-image-data"
 
     from app.models.annotation import Annotation
@@ -147,7 +144,7 @@ async def test_image_serve_no_leading_slash(
     token = jwt_token_factory()
     headers = {"Authorization": f"Bearer {token}"}
 
-    with patch("app.core.dependencies.get_minio_client", return_value=mock_minio):
+    with patch("app.core.minio_helper.get_minio_client", return_value=mock_minio):
         serve_resp = await test_client.get(
             f"/api/v1/studio/images/{ann.id}/serve",
             headers=headers,

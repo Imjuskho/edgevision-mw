@@ -71,7 +71,9 @@ async def upload_images(
     db: AsyncSession = Depends(get_db),
 ):
     if source not in VALID_SOURCES:
-        raise HTTPException(status_code=422, detail=f"Invalid source '{source}'. Must be one of: {', '.join(sorted(VALID_SOURCES))}")
+        raise HTTPException(
+            status_code=422, detail=f"Invalid source '{source}'. Must be one of: {', '.join(sorted(VALID_SOURCES))}"
+        )
     if len(files) == 0:
         raise HTTPException(status_code=400, detail="No files provided")
     if len(files) > MAX_FILES:
@@ -100,10 +102,12 @@ async def upload_images(
         max_size = MAX_VIDEO_SIZE if is_video_upload(f.content_type, original_filename, content) else MAX_FILE_SIZE
 
         if len(content) > max_size:
-            errors.append({
-                "filename": f.filename,
-                "error": f"File too large (max {max_size // (1024 * 1024)}MB)",
-            })
+            errors.append(
+                {
+                    "filename": f.filename,
+                    "error": f"File too large (max {max_size // (1024 * 1024)}MB)",
+                }
+            )
             continue
 
         if is_video_upload(f.content_type, original_filename, content):
@@ -134,13 +138,15 @@ async def upload_images(
         existing = (await db.execute(existing_stmt)).scalar_one_or_none()
         if existing:
             skipped += 1
-            uploaded.append(ImageUploadResponse(
-                filename=f.filename or "unknown",
-                annotation_id=str(existing.id),
-                status="skipped_duplicate",
-                checksum=checksum,
-                source=source,
-            ))
+            uploaded.append(
+                ImageUploadResponse(
+                    filename=f.filename or "unknown",
+                    annotation_id=str(existing.id),
+                    status="skipped_duplicate",
+                    checksum=checksum,
+                    source=source,
+                )
+            )
             continue
 
         content_type = inferred_type or f.content_type or "application/octet-stream"
@@ -164,17 +170,25 @@ async def upload_images(
                 trace_id=trace_id,
             )
 
-            uploaded.append(ImageUploadResponse(
-                filename=original_filename,
-                annotation_id=str(record.id),
-                status="uploaded",
-                checksum=checksum,
-                source=source,
-            ))
+            uploaded.append(
+                ImageUploadResponse(
+                    filename=original_filename,
+                    annotation_id=str(record.id),
+                    status="uploaded",
+                    checksum=checksum,
+                    source=source,
+                )
+            )
         except ImageValidationError as exc:
             errors.append({"filename": f.filename, "error": str(exc)})
         except Exception as exc:
-            logger.error("upload_file_error", trace_id=trace_id, filename=f.filename, error=str(exc), traceback=traceback.format_exc())
+            logger.error(
+                "upload_file_error",
+                trace_id=trace_id,
+                filename=f.filename,
+                error=str(exc),
+                traceback=traceback.format_exc(),
+            )
             errors.append({"filename": f.filename, "error": f"Upload failed: {exc}"})
 
     await db.commit()
@@ -186,13 +200,16 @@ async def upload_images(
 
     from app.api.metrics import uploads_total
 
-    uploads_total.labels(status="success").inc(
-        len([x for x in uploaded if x.status == "uploaded"])
-    )
+    uploads_total.labels(status="success").inc(len([x for x in uploaded if x.status == "uploaded"]))
     uploads_total.labels(status="skipped_duplicate").inc(skipped)
     uploads_total.labels(status="error").inc(len(errors))
 
-    logger.info("upload_batch_done", uploaded=len([x for x in uploaded if x.status == "uploaded"]), skipped=skipped, errors=len(errors))
+    logger.info(
+        "upload_batch_done",
+        uploaded=len([x for x in uploaded if x.status == "uploaded"]),
+        skipped=skipped,
+        errors=len(errors),
+    )
 
     return BatchUploadResponse(
         dataset_id=ds.dataset_id,
@@ -216,7 +233,9 @@ async def upload_image_from_url(
     db: AsyncSession = Depends(get_db),
 ):
     if source not in VALID_SOURCES:
-        raise HTTPException(status_code=422, detail=f"Invalid source '{source}'. Must be one of: {', '.join(sorted(VALID_SOURCES))}")
+        raise HTTPException(
+            status_code=422, detail=f"Invalid source '{source}'. Must be one of: {', '.join(sorted(VALID_SOURCES))}"
+        )
 
     user_id = UUID(user["sub"])
     tenant_id = get_current_tenant_id()
@@ -244,13 +263,15 @@ async def upload_image_from_url(
             uploaded=0,
             skipped=1,
             total=1,
-            images=[ImageUploadResponse(
-                filename=url.rsplit("/", 1)[-1] or "remote",
-                annotation_id=str(existing.id),
-                status="skipped_duplicate",
-                checksum=checksum,
-                source=source,
-            )],
+            images=[
+                ImageUploadResponse(
+                    filename=url.rsplit("/", 1)[-1] or "remote",
+                    annotation_id=str(existing.id),
+                    status="skipped_duplicate",
+                    checksum=checksum,
+                    source=source,
+                )
+            ],
             source=source,
         )
 
@@ -288,13 +309,15 @@ async def upload_image_from_url(
         uploaded=1,
         skipped=0,
         total=1,
-        images=[ImageUploadResponse(
-            filename=original_filename,
-            annotation_id=str(record.id),
-            status="uploaded",
-            checksum=checksum,
-            source=source,
-        )],
+        images=[
+            ImageUploadResponse(
+                filename=original_filename,
+                annotation_id=str(record.id),
+                status="uploaded",
+                checksum=checksum,
+                source=source,
+            )
+        ],
         source=source,
     )
 
@@ -339,6 +362,21 @@ async def _resolve_or_create_dataset(db: AsyncSession, dataset_id: str) -> Datas
 serve_router = APIRouter(prefix="/images", tags=["Image Serving"])
 
 
+@serve_router.get("/local-serve/{encoded_key:path}")
+async def local_serve_image(encoded_key: str, bucket: str = "edgevision-data-lake"):
+    import os
+    from fastapi.responses import FileResponse
+    from app.core.minio_helper import _local_volume_path
+
+    original_key = encoded_key.replace("_", "/")
+    local_path = _local_volume_path(bucket, original_key)
+    if not local_path:
+        raise HTTPException(status_code=404, detail="Image not found locally")
+    ext = os.path.splitext(local_path)[1].lower()
+    media_type = {"jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp"}.get(ext, "application/octet-stream")
+    return FileResponse(local_path, media_type=media_type)
+
+
 @serve_router.get("/{image_id}")
 async def get_image_metadata(
     image_id: UUID,
@@ -381,9 +419,7 @@ async def download_image(
     from app.core.config import settings
 
     try:
-        presigned_url = await get_presigned_get_url(
-            settings.MINIO_BUCKET, record.storage_key, expires=3600
-        )
+        presigned_url = await get_presigned_get_url(settings.MINIO_BUCKET, record.storage_key, expires=3600)
         return RedirectResponse(url=presigned_url, status_code=307)
     except Exception as exc:
         logger.error("presigned_url_error", image_id=str(image_id), error=str(exc))
@@ -450,6 +486,7 @@ async def serve_thumbnail(
 
 # ── Helpers ──────────────────────────────────────────────────
 
+
 async def _process_video_upload(
     *,
     content: bytes,
@@ -502,13 +539,15 @@ async def _process_video_upload(
         )
         existing = (await db.execute(existing_stmt)).scalar_one_or_none()
         if existing:
-            uploaded.append(ImageUploadResponse(
-                filename=frame_name,
-                annotation_id=str(existing.id),
-                status="skipped_duplicate",
-                checksum=frame_checksum,
-                source=source,
-            ))
+            uploaded.append(
+                ImageUploadResponse(
+                    filename=frame_name,
+                    annotation_id=str(existing.id),
+                    status="skipped_duplicate",
+                    checksum=frame_checksum,
+                    source=source,
+                )
+            )
             continue
 
         frame_telemetry = {
@@ -530,13 +569,15 @@ async def _process_video_upload(
                 telemetry=frame_telemetry,
                 trace_id=trace_id,
             )
-            uploaded.append(ImageUploadResponse(
-                filename=frame_name,
-                annotation_id=str(record.id),
-                status="uploaded",
-                checksum=frame_checksum,
-                source=source,
-            ))
+            uploaded.append(
+                ImageUploadResponse(
+                    filename=frame_name,
+                    annotation_id=str(record.id),
+                    status="uploaded",
+                    checksum=frame_checksum,
+                    source=source,
+                )
+            )
         except Exception as exc:
             logger.error(
                 "upload_video_frame_error",
@@ -562,7 +603,7 @@ ALLOWED_MAGIC_BYTES = {
 
 def _infer_mime_type(data: bytes) -> str | None:
     for sig, mime in ALLOWED_MAGIC_BYTES.items():
-        if data[:len(sig)] == sig:
+        if data[: len(sig)] == sig:
             return mime
     return None
 
@@ -579,16 +620,15 @@ def _decode_base64_data_url(data_url: str) -> tuple[bytes, str]:
         decoded = base64.b64decode(encoded)
         return decoded, content_type
     except (ValueError, IndexError, Exception) as exc:
-        raise HTTPException(
-            status_code=422, detail=f"Invalid base64 data URL: {exc}"
-        )
+        raise HTTPException(status_code=422, detail=f"Invalid base64 data URL: {exc}")
 
 
 async def _fetch_image_from_url(url: str) -> tuple[bytes, str]:
     try:
-        async with httpx.AsyncClient(
-            follow_redirects=True, timeout=30.0
-        ) as client, client.stream("GET", url) as response:
+        async with (
+            httpx.AsyncClient(follow_redirects=True, timeout=30.0) as client,
+            client.stream("GET", url) as response,
+        ):
             content_type = response.headers.get("content-type", "")
             if not content_type.startswith("image/"):
                 raise HTTPException(

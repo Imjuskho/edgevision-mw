@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { captureFrame, isVideoReady, resizeImageBlob } from "../utils/captureFrame";
+import { captureFrame, isVideoReady, ReusableFrameCapture } from "../utils/captureFrame";
 import { getWSBase } from "../utils/cameraManager";
 import { orientationFromMirror } from "../utils/orientation";
 import { queueLiveFrame } from "./useOfflineSync";
@@ -28,6 +28,8 @@ export interface LiveAnnotation {
   track_id?: number;
   mask?: number[][];
   mask_format?: "polygon" | "rle" | null;
+  distance_m?: number;
+  distance_quality?: string;
   bbox_3d?: {
     corners: number[][];
     dimensions?: [number, number, number];
@@ -53,6 +55,25 @@ export interface LiveAnnotationResult {
   depth_available?: boolean;
   dropped?: boolean;
   busy?: boolean;
+  type?: string;
+  event?: LiveEvent;
+  event_id?: string;
+  frames?: number;
+  storage_keys?: string[];
+}
+
+export interface LiveEvent {
+  event_id: string;
+  event_type: string;
+  rule_id: string;
+  rule_name: string;
+  track_id: number | null;
+  class_name: string | null;
+  confidence: number;
+  triggered_at: number;
+  duration_seconds: number | null;
+  auto_saved?: boolean;
+  details?: Record<string, unknown>;
 }
 
 interface UseLiveAnnotationOptions {
@@ -63,6 +84,9 @@ interface UseLiveAnnotationOptions {
   fps?: number;
   quality?: number;
   maxWidth?: number;
+  eventsEnabled?: boolean;
+  autoSave?: boolean;
+  datasetId?: string | null;
 }
 
 const LATENCY_THRESHOLD_MS = 1000;
@@ -77,153 +101,199 @@ export function useLiveAnnotation({
   fps: initialFps = 3,
   quality = 0.85,
   maxWidth = 512,
+  eventsEnabled = true,
+  autoSave = false,
+  datasetId = null,
 }: UseLiveAnnotationOptions) {
   const [annotations, setAnnotations] = useState<LiveAnnotation[]>([]);
+  const [liveEvents, setLiveEvents] = useState<LiveEvent[]>([]);
   const [isInferencing, setIsInferencing] = useState(false);
   const [lastInferenceMs, setLastInferenceMs] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [frameSize, setFrameSize] = useState<{ width: number; height: number } | null>(null);
   const [depthAvailable, setDepthAvailable] = useState(false);
-  const [effectiveFps, setEffectiveFps] = useState(initialFps);
   const wsRef = useRef<WebSocket | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
   const inferencingRef = useRef(false);
   const pendingSendRef = useRef(false);
   const mirroredRef = useRef(mirrored);
-  const onDeviceRef = useRef(false);
+  const eventsEnabledRef = useRef(eventsEnabled);
+  const autoSaveRef = useRef(autoSave);
+  const datasetIdRef = useRef(datasetId);
+  const [onDevice, setOnDevice] = useState(false);
 
   useEffect(() => {
     mirroredRef.current = mirrored;
   }, [mirrored]);
 
   useEffect(() => {
-    if (lastInferenceMs > LATENCY_THRESHOLD_MS) {
-      setEffectiveFps(MIN_FPS);
-    } else if (lastInferenceMs > 0 && lastInferenceMs <= LATENCY_THRESHOLD_MS) {
-      setEffectiveFps(Math.min(initialFps, MAX_FPS));
-    }
-  }, [lastInferenceMs, initialFps]);
+    eventsEnabledRef.current = eventsEnabled;
+  }, [eventsEnabled]);
+
+  useEffect(() => {
+    autoSaveRef.current = autoSave;
+  }, [autoSave]);
+
+  useEffect(() => {
+    datasetIdRef.current = datasetId;
+  }, [datasetId]);
+
+  const effectiveFps =
+    lastInferenceMs > LATENCY_THRESHOLD_MS
+      ? MIN_FPS
+      : lastInferenceMs > 0 && lastInferenceMs <= LATENCY_THRESHOLD_MS
+        ? Math.min(initialFps, MAX_FPS)
+        : initialFps;
 
   const getToken = useCallback(() => {
     return localStorage.getItem("studio_token") || "";
   }, []);
 
   useEffect(() => {
-    if (!enabled) {
-      setAnnotations([]);
-      setError(null);
-      setDepthAvailable(false);
-      onDeviceRef.current = false;
-      return;
-    }
-
-    if (modelType === "text_detection" && mirrored) {
-      setError("OCR requires un-mirrored frames — disable Mirror preview");
-      return;
-    }
-
-    const token = getToken();
-    if (!token) {
-      setError("Not authenticated");
-      return;
-    }
-
-    const wsBase = getWSBase();
-    const ws = new WebSocket(`${wsBase}/ws/annotate/live?model_type=${encodeURIComponent(modelType)}&token=${encodeURIComponent(token)}`);
-    ws.binaryType = "arraybuffer";
-    onDeviceRef.current = false;
-
-    ws.onopen = () => {
-      setError(null);
-    };
-
-    ws.onmessage = (event) => {
-      try {
-        const result: LiveAnnotationResult = JSON.parse(event.data);
-        if (result.error) {
-          setError(result.error);
-          inferencingRef.current = false;
-          pendingSendRef.current = false;
-          setIsInferencing(false);
-          return;
-        }
-        if (result.dropped || result.busy) {
-          pendingSendRef.current = false;
-          return;
-        }
-        setAnnotations(result.annotations || []);
-        setLastInferenceMs(result.inference_ms || 0);
-        setDepthAvailable(result.depth_available ?? false);
-        if (result.frame_width && result.frame_height) {
-          setFrameSize({ width: result.frame_width, height: result.frame_height });
-        }
-        inferencingRef.current = false;
-        pendingSendRef.current = false;
-        setIsInferencing(false);
-      } catch {
-        setError("Failed to parse annotation result");
-        inferencingRef.current = false;
-        pendingSendRef.current = false;
-        setIsInferencing(false);
-      }
-    };
-
-    ws.onerror = () => {
-      setError("WebSocket connection error");
-    };
-
-    ws.onclose = () => {
-      inferencingRef.current = false;
-      pendingSendRef.current = false;
-      setIsInferencing(false);
-      if (LIVE_ONDEVICE_SEG) {
-        onDeviceRef.current = true;
-        setError("WebSocket disconnected — on-device segmentation available");
-      }
-    };
-
-    wsRef.current = ws;
-
-    const tick = async () => {
-      const video = videoRef.current;
-      if (!video || !isVideoReady(video)) return;
-
-      if (inferencingRef.current || pendingSendRef.current) {
+    const run = async () => {
+      if (!enabled) {
+        setAnnotations([]);
+        setLiveEvents([]);
+        setError(null);
+        setDepthAvailable(false);
+        setOnDevice(false);
         return;
       }
 
-      const wsConn = wsRef.current;
-      if (wsConn && wsConn.readyState === WebSocket.OPEN) {
-        inferencingRef.current = true;
-        pendingSendRef.current = true;
-        setIsInferencing(true);
+      if (modelType === "text_detection" && mirrored) {
+        setError("OCR requires un-mirrored frames — disable Mirror preview");
+        return;
+      }
 
+      const token = getToken();
+      if (!token) {
+        setError("Not authenticated");
+        return;
+      }
+
+      const wsBase = getWSBase();
+      const params = new URLSearchParams({ model_type: modelType, token });
+      if (eventsEnabledRef.current) params.set("events", "1");
+      if (autoSaveRef.current && datasetIdRef.current) {
+        params.set("auto_save", "1");
+        params.set("dataset_id", datasetIdRef.current);
+      }
+      const ws = new WebSocket(`${wsBase}/ws/annotate/live?${params.toString()}`);
+      ws.binaryType = "arraybuffer";
+      setOnDevice(false);
+
+      ws.onopen = () => {
+        setError(null);
+      };
+
+      ws.onmessage = (event) => {
         try {
-          const blob = await captureFrame(video, quality, "image/jpeg", mirroredRef.current);
-          const resized = await resizeImageBlob(blob, maxWidth, quality);
-          const buffer = await resized.arrayBuffer();
-          wsConn.send(buffer);
+          const result: LiveAnnotationResult = JSON.parse(event.data);
+          if (result.type === "event" && result.event?.event_id) {
+            const ev = { ...result.event, auto_saved: false };
+            setLiveEvents((prev) => [ev, ...prev.filter((e) => e.event_id !== ev.event_id)].slice(0, 50));
+            return;
+          }
+          if (result.type === "event_saved" && result.event_id) {
+            const ev = {
+              event_id: result.event_id,
+              event_type: result.event?.event_type ?? "rule",
+              rule_id: result.event?.rule_id ?? "",
+              rule_name: result.event?.rule_name ?? "Rule triggered",
+              track_id: result.event?.track_id ?? null,
+              class_name: result.event?.class_name ?? null,
+              confidence: result.event?.confidence ?? 0,
+              triggered_at: result.event?.triggered_at ?? 0,
+              duration_seconds: result.event?.duration_seconds ?? null,
+              auto_saved: true,
+              details: result.event?.details,
+            } satisfies LiveEvent;
+            setLiveEvents((prev) => [ev, ...prev.filter((e) => e.event_id !== ev.event_id)].slice(0, 50));
+            return;
+          }
+          if (result.error) {
+            setError(result.error);
+            inferencingRef.current = false;
+            pendingSendRef.current = false;
+            setIsInferencing(false);
+            return;
+          }
+          if (result.dropped || result.busy) {
+            pendingSendRef.current = false;
+            return;
+          }
+          setAnnotations(result.annotations || []);
+          setLastInferenceMs(result.inference_ms || 0);
+          setDepthAvailable(result.depth_available ?? false);
+          if (result.frame_width && result.frame_height) {
+            setFrameSize({ width: result.frame_width, height: result.frame_height });
+          }
+          inferencingRef.current = false;
+          pendingSendRef.current = false;
+          setIsInferencing(false);
         } catch {
+          setError("Failed to parse annotation result");
           inferencingRef.current = false;
           pendingSendRef.current = false;
           setIsInferencing(false);
         }
-      } else if (LIVE_ONDEVICE_SEG && modelType === "object_detection") {
-        inferencingRef.current = true;
-        setIsInferencing(true);
-        try {
-          const blob = await captureFrame(video, quality, "image/jpeg", mirroredRef.current);
-          const resized = await resizeImageBlob(blob, maxWidth, quality);
-          await runOnDeviceSeg(resized, setAnnotations, setLastInferenceMs, setDepthAvailable);
-        } finally {
-          inferencingRef.current = false;
-          setIsInferencing(false);
+      };
+
+      ws.onerror = () => {
+        setError("WebSocket connection error");
+      };
+
+      ws.onclose = () => {
+        inferencingRef.current = false;
+        pendingSendRef.current = false;
+        setIsInferencing(false);
+        if (LIVE_ONDEVICE_SEG) {
+          setOnDevice(true);
+          setError("WebSocket disconnected — on-device segmentation available");
         }
-      }
+      };
+
+      wsRef.current = ws;
+      const frameCapture = new ReusableFrameCapture();
+
+      const tick = async () => {
+        const video = videoRef.current;
+        if (!video || !isVideoReady(video)) return;
+
+        if (inferencingRef.current || pendingSendRef.current) {
+          return;
+        }
+
+        const wsConn = wsRef.current;
+        if (wsConn && wsConn.readyState === WebSocket.OPEN) {
+          inferencingRef.current = true;
+          pendingSendRef.current = true;
+          setIsInferencing(true);
+
+          try {
+            const blob = await frameCapture.capture(video, maxWidth, quality, mirroredRef.current);
+            wsConn.send(blob);
+          } catch {
+            inferencingRef.current = false;
+            pendingSendRef.current = false;
+            setIsInferencing(false);
+          }
+        } else if (LIVE_ONDEVICE_SEG && modelType === "object_detection") {
+          inferencingRef.current = true;
+          setIsInferencing(true);
+          try {
+            const blob = await frameCapture.capture(video, maxWidth, quality, mirroredRef.current);
+            await runOnDeviceSeg(blob, setAnnotations, setLastInferenceMs, setDepthAvailable);
+          } finally {
+            inferencingRef.current = false;
+            setIsInferencing(false);
+          }
+        }
+      };
+
+      intervalRef.current = setInterval(() => void tick(), 1000 / effectiveFps);
     };
-
-    intervalRef.current = setInterval(() => void tick(), 1000 / effectiveFps);
-
+    void run();
     return () => {
       clearInterval(intervalRef.current);
       inferencingRef.current = false;
@@ -302,6 +372,7 @@ export function useLiveAnnotation({
 
   return {
     annotations,
+    liveEvents,
     isInferencing,
     lastInferenceMs,
     error,
@@ -309,7 +380,7 @@ export function useLiveAnnotation({
     frameSize,
     depthAvailable,
     effectiveFps,
-    onDevice: onDeviceRef.current,
+    onDevice,
   };
 }
 

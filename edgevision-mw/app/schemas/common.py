@@ -38,6 +38,11 @@ class Detection(BaseModel):
     def validate_bbox(cls, v: list[float]) -> list[float]:
         if not all(0.0 <= x <= 1.0 for x in v):
             raise ValueError("all bbox values must be in range [0.0, 1.0]")
+        x, y, w, h = v
+        if w <= 0.0 or h <= 0.0:
+            raise ValueError("bbox width and height must be positive")
+        if x + w > 1.0 or y + h > 1.0:
+            raise ValueError("bbox must lie within the normalized frame [0, 1]")
         return v
 
 
@@ -54,6 +59,8 @@ class PaginationParams(BaseModel):
 
 
 class PaginatedResponse[T](BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     items: list[T] = Field(..., description="List of items for the current page")
     total: int = Field(..., description="Total number of items across all pages")
     page: int = Field(..., description="Current page number")
@@ -87,10 +94,16 @@ class TimeRange(BaseModel):
     start: datetime = Field(..., description="Start of the time range (inclusive)")
     end: datetime = Field(..., description="End of the time range (exclusive)")
 
+    @model_validator(mode="after")
+    def check_order(self) -> TimeRange:
+        if self.end <= self.start:
+            raise ValueError("end must be after start")
+        return self
+
 
 class WeatherData(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    temp_c: float = Field(..., description="Temperature in degrees Celsius")
-    humidity_pct: float = Field(..., description="Relative humidity as percentage (0-100)")
-    lux: float = Field(..., description="Ambient light level in lux")
+    temp_c: float = Field(..., ge=-100.0, le=100.0, description="Temperature in degrees Celsius")
+    humidity_pct: float = Field(..., ge=0.0, le=100.0, description="Relative humidity as percentage (0-100)")
+    lux: float = Field(..., ge=0.0, description="Ambient light level in lux")

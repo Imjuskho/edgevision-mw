@@ -66,9 +66,7 @@ class CircuitBreaker:
 
     def call(self, func, *args, **kwargs):
         if not self.is_available():
-            raise CircuitBreakerOpenError(
-                f"Circuit breaker '{self.name}' is OPEN. Service unavailable."
-            )
+            raise CircuitBreakerOpenError(f"Circuit breaker '{self.name}' is OPEN. Service unavailable.")
         try:
             result = func(*args, **kwargs)
             self._record_success()
@@ -79,9 +77,7 @@ class CircuitBreaker:
 
     async def acall(self, func, *args, **kwargs):
         if not self.is_available():
-            raise CircuitBreakerOpenError(
-                f"Circuit breaker '{self.name}' is OPEN. Service unavailable."
-            )
+            raise CircuitBreakerOpenError(f"Circuit breaker '{self.name}' is OPEN. Service unavailable.")
         try:
             result = await func(*args, **kwargs)
             self._record_success()

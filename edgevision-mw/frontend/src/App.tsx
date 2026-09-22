@@ -96,6 +96,14 @@ const NAV_SECTION_DEFS: { sectionKey: string; items: NavItemDef[] }[] = [
       { key: "export", labelKey: "nav.export", icon: "M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" },
     ],
   },
+  {
+    sectionKey: "nav.sections.revenue",
+    items: [
+      { key: "operator", labelKey: "nav.operator", icon: "M12 20V10M18 20V4M6 20v-4" },
+      { key: "buyer", labelKey: "nav.buyer", icon: "M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4zM3 6h18M16 10a4 4 0 01-8 0" },
+      { key: "subject", labelKey: "nav.subject", icon: "M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2M12 3a4 4 0 110 8 4 4 0 010-8z" },
+    ],
+  },
 ];
 
 function StudioApp() {
@@ -189,7 +197,10 @@ function StudioApp() {
   );
 
   useEffect(() => {
-    if (isAuthenticated) loadDatasets(1, false);
+    const load = async () => {
+      if (isAuthenticated) await loadDatasets(1, false);
+    };
+    void load();
   }, [isAuthenticated, loadDatasets]);
 
   const loadMoreDatasets = useCallback(async () => {
@@ -333,12 +344,28 @@ function StudioApp() {
     }
   }, [datasetId]);
 
-  useEffect(() => {
+  const [prevNavDatasetId, setPrevNavDatasetId] = useState(datasetId);
+  if (datasetId !== prevNavDatasetId) {
+    setPrevNavDatasetId(datasetId);
+    setImageIndex(0);
     if (!datasetId || datasetId.length < 3) {
       setHealth(null);
       setHealthError(false);
-      return;
     }
+  }
+
+  const [prevSessionView, setPrevSessionView] = useState(view);
+  if (view !== prevSessionView) {
+    setPrevSessionView(view);
+    if (!SESSION_VIEWS.includes(view)) {
+      setSessionId("");
+      setSessionDatasetId("");
+      setImageIndex(0);
+    }
+  }
+
+  useEffect(() => {
+    if (!datasetId || datasetId.length < 3) return;
     if (healthDebounceRef.current) clearTimeout(healthDebounceRef.current);
     healthDebounceRef.current = setTimeout(() => loadHealth(), 800);
     return () => {
@@ -346,19 +373,35 @@ function StudioApp() {
     };
   }, [datasetId, loadHealth]);
 
-  useEffect(() => {
-    if (!SESSION_VIEWS.includes(view)) {
-      setSessionId("");
-      setSessionDatasetId("");
-      setImageIndex(0);
-    }
-  }, [view]);
-
-  useEffect(() => {
-    setImageIndex(0);
-  }, [datasetId]);
-
   const viewTitle = t(`views.${view}`, VIEW_TITLES[view] || view);
+
+  const handleNavClick = useCallback(
+    (item: NavItemDef & { label: string }) => {
+      const needsDataset =
+        DATASET_SCOPED_VIEWS.includes(item.key) && item.key !== "home" && item.key !== "datasets";
+      const activeDatasetId = navigationDatasetId;
+
+      if (needsDataset && !activeDatasetId) {
+        showToast(t("app.selectDatasetFirst"), "info");
+        navigate("/datasets");
+        return;
+      }
+
+      if (!canAccessView(user?.role, item.key)) {
+        showToast(t("app.accessDenied", "You don't have access to this area."), "info");
+        return;
+      }
+
+      if (!isViewEnabled(item.key)) {
+        showToast(t("settings.featureDisabled", "This feature is disabled in Settings."), "info");
+        navigate("/settings");
+        return;
+      }
+
+      navigateToView(item.key);
+    },
+    [navigationDatasetId, showToast, t, navigate, user?.role, isViewEnabled, navigateToView],
+  );
 
   const commandItems = useMemo((): CommandItem[] => {
     const navItems: CommandItem[] = navSections.flatMap((section) =>
@@ -366,7 +409,7 @@ function StudioApp() {
         id: `nav-${item.key}`,
         label: item.label,
         group: section.section,
-        onSelect: () => handleNavClickRef.current(item),
+        onSelect: () => handleNavClick(item),
       })),
     );
     return [
@@ -391,9 +434,7 @@ function StudioApp() {
         onSelect: () => setShortcutHelpOpen(true),
       },
     ];
-  }, [navSections, t, triggerSync, navigate]);
-
-  const handleNavClickRef = useRef<(item: NavItemDef & { label: string }) => void>(() => {});
+  }, [navSections, t, triggerSync, navigate, handleNavClick]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -441,37 +482,9 @@ function StudioApp() {
         })();
       },
     },
-    [isAdmin, view, datasetId, navigateToView, navigate, effectiveSessionId, confirmLeaveIfNeeded, showToast, t],
   );
 
   if (!isAuthenticated) return <LoginPage />;
-
-  const handleNavClick = (item: NavItemDef & { label: string }) => {
-    const needsDataset =
-      DATASET_SCOPED_VIEWS.includes(item.key) && item.key !== "home" && item.key !== "datasets";
-    const activeDatasetId = navigationDatasetId;
-
-    if (needsDataset && !activeDatasetId) {
-      showToast(t("app.selectDatasetFirst"), "info");
-      navigate("/datasets");
-      return;
-    }
-
-    if (!canAccessView(user?.role, item.key)) {
-      showToast(t("app.accessDenied", "You don't have access to this area."), "info");
-      return;
-    }
-
-    if (!isViewEnabled(item.key)) {
-      showToast(t("settings.featureDisabled", "This feature is disabled in Settings."), "info");
-      navigate("/settings");
-      return;
-    }
-
-    navigateToView(item.key);
-  };
-
-  handleNavClickRef.current = handleNavClick;
 
   const homeContent = (
     <DashboardHome

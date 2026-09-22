@@ -31,7 +31,7 @@ async def analyze_dataset_road_condition(
         surface_counts[st] = surface_counts.get(st, 0) + 1
 
         if ra.instances:
-            for inst in (ra.instances if isinstance(ra.instances, list) else []):
+            for inst in ra.instances if isinstance(ra.instances, list) else []:
                 class_id = inst.get("class_id") if isinstance(inst, dict) else getattr(inst, "class_id", None)
                 if class_id == 1:
                     total_potholes += 1

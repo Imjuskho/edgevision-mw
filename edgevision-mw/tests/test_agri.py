@@ -35,17 +35,13 @@ class TestAgriClasses:
         assert data["version"] == "v1.0"
         assert len(data["classes"]) > 0
 
-    async def test_get_classes_without_auth_returns_200(
-        self, test_client: AsyncClient
-    ):
+    async def test_get_classes_without_auth_returns_200(self, test_client: AsyncClient):
         resp = await test_client.get("/api/v1/agri/classes")
         assert resp.status_code == 200
         data = resp.json()
         assert "classes" in data
 
-    async def test_classes_contain_crop_and_health_entries(
-        self, test_client: AsyncClient, jwt_token_factory: object
-    ):
+    async def test_classes_contain_crop_and_health_entries(self, test_client: AsyncClient, jwt_token_factory: object):
         token = jwt_token_factory("ADMIN")
         resp = await test_client.get(
             "/api/v1/agri/classes",
@@ -63,9 +59,7 @@ class TestAgriClasses:
 
 
 class TestAgriSegment:
-    async def test_segment_nonexistent_image_returns_404(
-        self, test_client: AsyncClient, jwt_token_factory: object
-    ):
+    async def test_segment_nonexistent_image_returns_404(self, test_client: AsyncClient, jwt_token_factory: object):
         token = jwt_token_factory("ADMIN")
         fake_id = str(uuid4())
         resp = await test_client.post(
@@ -76,9 +70,7 @@ class TestAgriSegment:
         assert resp.status_code == 404
         assert "not found" in resp.json()["detail"].lower()
 
-    async def test_segment_requires_auth(
-        self, test_client: AsyncClient
-    ):
+    async def test_segment_requires_auth(self, test_client: AsyncClient):
         resp = await test_client.post(
             "/api/v1/agri/segment",
             json={"image_id": str(uuid4())},
@@ -87,9 +79,7 @@ class TestAgriSegment:
 
 
 class TestAgriSegmentBatch:
-    async def test_batch_requires_auth(
-        self, test_client: AsyncClient
-    ):
+    async def test_batch_requires_auth(self, test_client: AsyncClient):
         resp = await test_client.post(
             "/api/v1/agri/segment/batch",
             json={"image_ids": [str(uuid4())]},
@@ -98,9 +88,7 @@ class TestAgriSegmentBatch:
 
 
 class TestAgriResult:
-    async def test_get_nonexistent_result_returns_404(
-        self, test_client: AsyncClient, jwt_token_factory: object
-    ):
+    async def test_get_nonexistent_result_returns_404(self, test_client: AsyncClient, jwt_token_factory: object):
         token = jwt_token_factory("ADMIN")
         fake_id = str(uuid4())
         resp = await test_client.get(
@@ -109,17 +97,11 @@ class TestAgriResult:
         )
         assert resp.status_code == 404
 
-    async def test_get_result_requires_auth(
-        self, test_client: AsyncClient
-    ):
-        resp = await test_client.get(
-            f"/api/v1/agri/result/{uuid4()}"
-        )
+    async def test_get_result_requires_auth(self, test_client: AsyncClient):
+        resp = await test_client.get(f"/api/v1/agri/result/{uuid4()}")
         assert resp.status_code in (401, 403)
 
-    async def test_update_nonexistent_result_returns_404(
-        self, test_client: AsyncClient, jwt_token_factory: object
-    ):
+    async def test_update_nonexistent_result_returns_404(self, test_client: AsyncClient, jwt_token_factory: object):
         token = jwt_token_factory("ADMIN")
         fake_id = str(uuid4())
         resp = await test_client.patch(
@@ -129,9 +111,7 @@ class TestAgriResult:
         )
         assert resp.status_code == 404
 
-    async def test_update_result_requires_role(
-        self, test_client: AsyncClient, jwt_token_factory: object
-    ):
+    async def test_update_result_requires_role(self, test_client: AsyncClient, jwt_token_factory: object):
         token = jwt_token_factory("BUYER")
         resp = await test_client.patch(
             f"/api/v1/agri/result/{uuid4()}",
@@ -142,18 +122,14 @@ class TestAgriResult:
 
 
 class TestAgriAnalyze:
-    async def test_analyze_requires_auth(
-        self, test_client: AsyncClient
-    ):
+    async def test_analyze_requires_auth(self, test_client: AsyncClient):
         resp = await test_client.post(
             "/api/v1/agri/analyze",
             json={"dataset_id": str(uuid4())},
         )
         assert resp.status_code in (401, 403)
 
-    async def test_analyze_requires_admin_or_qa_role(
-        self, test_client: AsyncClient, jwt_token_factory: object
-    ):
+    async def test_analyze_requires_admin_or_qa_role(self, test_client: AsyncClient, jwt_token_factory: object):
         token = jwt_token_factory("ANNOTATOR")
         resp = await test_client.post(
             "/api/v1/agri/analyze",
@@ -185,9 +161,7 @@ class TestAgriAnalyze:
         assert data["weed_pressure"] in ("low", "medium", "high")
         assert data["pest_risk"] in ("low", "medium", "high")
 
-    async def test_analyze_is_scoped_to_dataset(
-        self, db_session, test_client, jwt_token_factory
-    ):
+    async def test_analyze_is_scoped_to_dataset(self, db_session, test_client, jwt_token_factory):
         from app.models.agri_annotation import AgriAnnotation
         from app.models.dataset import Dataset
         from app.models.enums import (
@@ -385,6 +359,7 @@ class TestAgriSegmentMergedInstances:
         import io
 
         from PIL import Image as PILImage
+
         fake_pil_bytes = io.BytesIO()
         PILImage.fromarray(fake_image).save(fake_pil_bytes, format="JPEG")
         fake_pil_bytes.seek(0)

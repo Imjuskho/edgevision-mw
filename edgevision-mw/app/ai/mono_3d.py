@@ -1,4 +1,5 @@
 """Monocular 3D bounding box estimation with optional depth map."""
+
 from __future__ import annotations
 
 import math
@@ -9,11 +10,22 @@ from app.core.logging import get_logger
 
 logger = get_logger("edgevision.mono_3d")
 
-_3D_CLASSES = frozenset({
-    "car", "truck", "bus", "motorcycle", "bicycle",
-    "person", "car_private", "truck_freight", "minibus",
-    "motorcycle_kabaza", "bicycle_private", "pedestrian_roadside",
-})
+_3D_CLASSES = frozenset(
+    {
+        "car",
+        "truck",
+        "bus",
+        "motorcycle",
+        "bicycle",
+        "person",
+        "car_private",
+        "truck_freight",
+        "minibus",
+        "motorcycle_kabaza",
+        "bicycle_private",
+        "pedestrian_roadside",
+    }
+)
 
 _CLASS_PRIORS: dict[str, tuple[float, float, float]] = {
     "car": (4.5, 1.8, 1.5),
@@ -108,8 +120,17 @@ def estimate_3d(
     taxonomy_label: str | None = None,
     *,
     depth_available: bool = False,
+    metric_distance_m: float | None = None,
+    metric_distance_quality: str | None = None,
+    depth_calibration=None,
+    camera_id: str | None = None,
 ) -> dict | None:
-    """Estimate a 3D box from a 2D bbox, class prior, and optional depth map."""
+    """Estimate a 3D box from a 2D bbox, class prior, and optional depth map.
+
+    When ``depth_calibration`` (a ``CameraDepthCalibration``) is provided and
+    calibrated, the ONNX relative depth is converted to metric meters using the
+    stored scale factor — overriding the hardcoded ``2.0 + raw * 20.0`` mapping.
+    """
     key = _class_key(class_name, taxonomy_label)
     if key not in _3D_CLASSES and class_name not in _3D_CLASSES:
         return None
@@ -127,26 +148,47 @@ def estimate_3d(
         return None
     scale = (height_m * _FOCAL_LENGTH_PX) / pixel_height
 
-    depth = 0.5
+    depth = 5.0
     distance_quality = "heuristic_vertical"
-    if depth_map is not None:
+    depth_source = "heuristic"
+    if metric_distance_m is not None and math.isfinite(metric_distance_m):
+        depth = float(metric_distance_m)
+        distance_quality = metric_distance_quality or "metric_ground_plane"
+        depth_source = "metric_ground_plane"
+    elif depth_map is not None:
         try:
             from app.ai.depth_estimator import get_depth_estimator
 
-            depth, distance_quality = get_depth_estimator().depth_at_bbox(depth_map, bbox_xywh)
+            raw_depth, depth_quality_raw = get_depth_estimator().depth_at_bbox(depth_map, bbox_xywh)
+            # Use calibration if available, otherwise fall back to linear mapping
+            if depth_calibration is not None and depth_calibration.is_calibrated:
+                from app.ai.depth_calibration import relative_to_metric
+
+                calibrated_m = relative_to_metric(raw_depth, depth_calibration)
+                if calibrated_m is not None and math.isfinite(calibrated_m) and calibrated_m > 0:
+                    depth = calibrated_m
+                    distance_quality = f"depth_calibrated_{depth_calibration.mode}"
+                    depth_source = "depth_calibrated"
+                else:
+                    depth = 2.0 + raw_depth * 20.0
+                    distance_quality = depth_quality_raw
+                    depth_source = "depth_onnx_uncalibrated"
+            else:
+                depth = 2.0 + raw_depth * 20.0
+                distance_quality = depth_quality_raw
+                depth_source = "depth_onnx_uncalibrated"
         except Exception:
-            depth = 0.5 + cy * 0.3
+            depth = 2.0 + cy * 15.0
             distance_quality = "heuristic_vertical"
     else:
-        depth = 0.5 + cy * 0.3
+        depth = 2.0 + cy * 15.0
+        depth_source = "heuristic_vertical"
 
-    yaw, yaw_source = _estimate_yaw(
-        bbox_xywh, depth_map, depth_available=depth_available
-    )
+    yaw, yaw_source = _estimate_yaw(bbox_xywh, depth_map, depth_available=depth_available)
 
-    half_l = (length_m * scale / img_w) / 2
-    (width_m * scale / img_w) / 2
-    half_h = (height_m * scale / img_h) / 2
+    half_l = (length_m * _FOCAL_LENGTH_PX) / (2 * depth * img_w)
+    half_w = (width_m * _FOCAL_LENGTH_PX) / (2 * depth * img_w)
+    half_h = (height_m * _FOCAL_LENGTH_PX) / (2 * depth * img_h)
 
     z_base = depth
     z_top = depth + half_h * 2
@@ -165,11 +207,16 @@ def estimate_3d(
     if abs(yaw) > 1e-4:
         corners = _rotate_corners_xz(corners, cx, cy, yaw)
 
-    limitation = (
-        "depth_onnx_yaw_estimated"
-        if depth_available
-        else "heuristic_prior_no_depth"
-    )
+    if metric_distance_m is not None and math.isfinite(metric_distance_m):
+        limitation = "metric_depth_ground_plane"
+        if depth_available:
+            limitation = "metric_depth_ground_plane,depth_onnx_yaw_estimated"
+    elif depth_source == "depth_calibrated":
+        limitation = "depth_calibrated"
+        if depth_available:
+            limitation = "depth_calibrated,depth_onnx_yaw_estimated"
+    else:
+        limitation = "depth_onnx_yaw_estimated" if depth_available else "heuristic_prior_no_depth"
 
     return {
         "corners": [[round(c[0], 4), round(c[1], 4), round(c[2], 4)] for c in corners],
@@ -177,6 +224,8 @@ def estimate_3d(
         "yaw": round(yaw, 4),
         "yaw_source": yaw_source,
         "distance_quality": distance_quality,
+        "distance_m": round(depth, 3),
+        "depth_source": depth_source,
         "limitation": limitation,
         "depth_available": depth_available,
     }
@@ -219,8 +268,15 @@ def attach_3d_boxes(
     depth_map=None,
     *,
     depth_available: bool = False,
+    depth_calibration=None,
+    camera_id: str | None = None,
 ) -> list[dict]:
-    """Attach ``bbox_3d`` to each detection when class is in ``_3D_CLASSES``."""
+    """Attach ``bbox_3d`` to each detection when class is in ``_3D_CLASSES``.
+
+    When ``depth_calibration`` is provided and calibrated, ONNX relative depth
+    is converted to metric meters using the per-camera calibration before
+    generating 3D cuboids.
+    """
     if not detections:
         return detections
 
@@ -240,6 +296,10 @@ def attach_3d_boxes(
             depth_map=depth_map,
             taxonomy_label=d.get("taxonomy_label"),
             depth_available=depth_available,
+            metric_distance_m=d.get("distance_m"),
+            metric_distance_quality=d.get("distance_quality"),
+            depth_calibration=depth_calibration,
+            camera_id=camera_id,
         )
         if box_3d:
             d["bbox_3d"] = box_3d

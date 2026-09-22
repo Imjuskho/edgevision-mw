@@ -24,9 +24,7 @@ COLOR_RANGES: dict[str, tuple[tuple[int, int, int], tuple[int, int, int]]] = {
 }
 
 
-def extract_dominant_colors(
-    image: np.ndarray, top_k: int = 5
-) -> list[dict[str, float | list[int]]]:
+def extract_dominant_colors(image: np.ndarray, top_k: int = 5) -> list[dict[str, float | list[int]]]:
     pixels = image.reshape(-1, 3)
     _, labels, centers = cv2.kmeans(
         pixels.astype(np.float32),
@@ -63,9 +61,7 @@ def classify_colors(image: np.ndarray) -> dict[str, float]:
     return result
 
 
-def color_histogram(
-    image: np.ndarray, bins: int = 32
-) -> dict[str, list[float]]:
+def color_histogram(image: np.ndarray, bins: int = 32) -> dict[str, list[float]]:
     hsv = cv2.cvtColor(image, cv2.COLOR_RGB2HSV)
     h, s, v = cv2.split(hsv)
     h_hist = cv2.calcHist([h], [0], None, [bins], [0, 180]).flatten()

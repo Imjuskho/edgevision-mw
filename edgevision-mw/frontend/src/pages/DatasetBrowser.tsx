@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { Database, Plus, RotateCcw } from "lucide-react";
 import type { Dataset } from "../types";
+import { DatasetQualityPanel } from "../components/DatasetQualityPanel";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import {
   Badge,
@@ -333,6 +334,14 @@ export default function DatasetBrowser({
                     </Badge>
                   </div>
                   <div className="ds-name" title={ds.name}>{ds.name || id}</div>
+                  <DatasetQualityPanel
+                    iaaScore={ds.iaa_score}
+                    piiScrubVerified={ds.pii_scrub_verified}
+                    consentCoveragePct={ds.consent_coverage_pct}
+                    sampleCount={ds.sample_count}
+                    classes={ds.classes}
+                    status={ds.status}
+                  />
                   <div className="ds-meta-row">
                     <span>{ds.sample_count?.toLocaleString()} {t("datasets.images")}</span>
                     <span title={formatDate(lastActivity, i18n.language)}>

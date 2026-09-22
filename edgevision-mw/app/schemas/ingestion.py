@@ -12,7 +12,7 @@ class BatchUpload(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     node_id: UUID = Field(..., description="UUID of the uploading node")
-    batch_id: str = Field(..., description="Client-generated batch identifier")
+    batch_id: str = Field(..., min_length=3, max_length=128, description="Client-generated batch identifier")
     event_count: int = Field(..., description="Number of events in this batch", ge=1)
     file_size_bytes: int = Field(..., gt=0, description="Total file size in bytes")
     checksum_sha256: str = Field(..., pattern=r"^[0-9a-fA-F]{64}$", description="SHA-256 hex hash")
@@ -34,7 +34,7 @@ class BatchResponse(BaseModel):
 class BatchValidation(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    checksum_sha256: str = Field(..., description="SHA-256 checksum of the batch payload")
+    checksum_sha256: str = Field(..., pattern=r"^[0-9a-fA-F]{64}$", description="SHA-256 checksum of the batch payload")
     node_signature: str = Field(..., description="Base64-encoded Ed25519 signature of the batch")
     expected_node_id: UUID = Field(..., description="Expected UUID of the signing node")
 

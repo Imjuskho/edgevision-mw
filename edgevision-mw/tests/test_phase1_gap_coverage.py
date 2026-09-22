@@ -34,6 +34,7 @@ from app.models.node import Node
 from app.schemas.node import HeartbeatPayload
 from app.services.billing import confirm_delivery, get_revenue_breakdown, refund_escrow
 from app.services.fleet import record_heartbeat
+from tests.conftest import _create_node
 
 # Imported from conftest to access the session factory in API-level tests
 
@@ -41,6 +42,7 @@ from app.services.fleet import record_heartbeat
 # ---------------------------------------------------------------------------
 # Factory helpers — all required fields, matching real models exactly
 # ---------------------------------------------------------------------------
+
 
 async def _create_user(session: AsyncSession, credit: Decimal = Decimal("0.00")) -> User:
     user = User(
@@ -114,29 +116,6 @@ async def _create_export(
     return export
 
 
-async def _create_node(session: AsyncSession, status: NodeStatus = NodeStatus.ONLINE) -> Node:
-    node = Node(
-        id=uuid4(),
-        node_id=f"G2-N-{uuid4().hex[:6]}",
-        district="Lilongwe",
-        latitude=-13.9626,
-        longitude=33.7741,
-        category=NodeCategory.ROAD,
-        hardware_profile={},
-        network_config={},
-        capture_schedule="*/5 * * * *",
-        interest_classes=["vehicle"],
-        pii_mode=PIIMode.STRICT,
-        firmware_version="2.1.0",
-        public_key=b"\x03" * 32,
-        status=status,
-        is_enabled=True,
-    )
-    session.add(node)
-    await session.flush()
-    return node
-
-
 async def _create_annotation_with_batch(
     session: AsyncSession,
     status: AnnotationStatus,
@@ -180,6 +159,7 @@ async def _create_annotation_with_batch(
 # 5. C1 (round 2) — concurrent refund_escrow calls on the SAME export
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_concurrent_refund_escrow_prevents_double_credit(db_session_factory):
     """
@@ -198,7 +178,10 @@ async def test_concurrent_refund_escrow_prevents_double_credit(db_session_factor
         user = await _create_user(setup, credit=starting_balance)
         ds = await _create_ready_dataset(setup, price=price)
         export = await _create_export(
-            setup, buyer_id=user.id, dataset_id=ds.id, price=price,
+            setup,
+            buyer_id=user.id,
+            dataset_id=ds.id,
+            price=price,
             status=ExportStatus.FAILED,
         )
         await setup.commit()
@@ -227,6 +210,7 @@ async def test_concurrent_refund_escrow_prevents_double_credit(db_session_factor
 # Edge case 1 — refund from two DIFFERENT trigger reasons sequentially
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_refund_escrow_guards_across_different_trigger_reasons(db_session):
     """
@@ -239,7 +223,10 @@ async def test_refund_escrow_guards_across_different_trigger_reasons(db_session)
     user = await _create_user(db_session, credit=starting_balance)
     ds = await _create_ready_dataset(db_session, price=price)
     export = await _create_export(
-        db_session, buyer_id=user.id, dataset_id=ds.id, price=price,
+        db_session,
+        buyer_id=user.id,
+        dataset_id=ds.id,
+        price=price,
         status=ExportStatus.FAILED,
     )
     await db_session.commit()
@@ -259,6 +246,7 @@ async def test_refund_escrow_guards_across_different_trigger_reasons(db_session)
 # Edge case 2 — refund on a $0 export is a safe no-op
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_refund_escrow_zero_price_export_is_a_safe_no_op(db_session):
     """
@@ -271,8 +259,11 @@ async def test_refund_escrow_zero_price_export_is_a_safe_no_op(db_session):
     user = await _create_user(db_session, credit=starting_balance)
     ds = await _create_ready_dataset(db_session, price=Decimal("0.00"))
     export = await _create_export(
-        db_session, buyer_id=user.id, dataset_id=ds.id,
-        price=Decimal("0.00"), status=ExportStatus.FAILED,
+        db_session,
+        buyer_id=user.id,
+        dataset_id=ds.id,
+        price=Decimal("0.00"),
+        status=ExportStatus.FAILED,
     )
     await db_session.commit()
 
@@ -287,6 +278,7 @@ async def test_refund_escrow_zero_price_export_is_a_safe_no_op(db_session):
 # Edge case 3 — concurrent confirm_delivery (B3 check-then-act race)
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_concurrent_confirm_delivery_only_one_completes(db_session_factory):
     """
@@ -297,7 +289,9 @@ async def test_concurrent_confirm_delivery_only_one_completes(db_session_factory
         ds = await _create_ready_dataset(setup)
         buyer = await _create_user(setup, credit=Decimal("500.00"))
         export = await _create_export(
-            setup, buyer_id=buyer.id, dataset_id=ds.id,
+            setup,
+            buyer_id=buyer.id,
+            dataset_id=ds.id,
             status=ExportStatus.PROCESSING,
         )
         await setup.commit()
@@ -320,6 +314,7 @@ async def test_concurrent_confirm_delivery_only_one_completes(db_session_factory
 # ---------------------------------------------------------------------------
 # Edge case 4 — node recovers from DEGRADED/OFFLINE back to ONLINE
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_node_recovers_to_online_after_heartbeat_resumes(db_session):
@@ -358,6 +353,7 @@ async def test_node_recovers_to_online_after_heartbeat_resumes(db_session):
 # Edge case 5 — revenue aggregation rounding on values that don't divide evenly
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_revenue_breakdown_rounds_correctly_on_uneven_split(db_session):
     """
@@ -393,10 +389,9 @@ async def test_revenue_breakdown_rounds_correctly_on_uneven_split(db_session):
 # A2 — buyer_id must come from auth context, not client payload
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
-async def test_export_request_ignores_body_buyer_id(
-    test_client, jwt_token_factory, monkeypatch
-):
+async def test_export_request_ignores_body_buyer_id(test_client, jwt_token_factory, monkeypatch):
     """
     A2: ExportRequest schema no longer accepts buyer_id.
     The API layer injects buyer_id from the authenticated user.
@@ -410,10 +405,13 @@ async def test_export_request_ignores_body_buyer_id(
     async def spy_initiate_export(db, export_data):
         captured_export_data.update(export_data)
         return ExportResponse(
-            id=uuid4(), dataset_id=export_data["dataset_id"],
+            id=uuid4(),
+            dataset_id=export_data["dataset_id"],
             buyer_id=UUID(export_data["buyer_id"]),
-            status="PENDING", license_key="ev-test1234",
-            price_usd=Decimal("50.00"), export_path=None,
+            status="PENDING",
+            license_key="ev-test1234",
+            price_usd=Decimal("50.00"),
+            export_path=None,
             initiated_at=datetime.now(UTC),
         )
 
@@ -437,14 +435,14 @@ async def test_export_request_ignores_body_buyer_id(
 
     assert resp.status_code == 201
     assert captured_export_data["buyer_id"] == buyer_a_id, (
-        f"buyer_id was {captured_export_data['buyer_id']} (body value), "
-        f"expected {buyer_a_id} (auth context value)"
+        f"buyer_id was {captured_export_data['buyer_id']} (body value), expected {buyer_a_id} (auth context value)"
     )
 
 
 # ---------------------------------------------------------------------------
 # Workstream B — Ingestion batch state machine
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_batch_starts_as_pending_not_validating(db_session):
@@ -453,13 +451,21 @@ async def test_batch_starts_as_pending_not_validating(db_session):
 
     node_id = uuid4()
     node = Node(
-        id=node_id, node_id=f"node-b1-{uuid4().hex[:6]}",
-        district="Lilongwe", latitude=-13.96, longitude=33.79,
-        category=NodeCategory.ROAD, hardware_profile={"gpu": "jetson"},
-        network_config={"apn": "airtel"}, capture_schedule="*/10 * * * *",
-        interest_classes=["vehicle"], pii_mode=PIIMode.STRICT,
-        firmware_version="1.0.0", public_key=b"\x01" * 32,
-        status=NodeStatus.ONLINE, is_enabled=True,
+        id=node_id,
+        node_id=f"node-b1-{uuid4().hex[:6]}",
+        district="Lilongwe",
+        latitude=-13.96,
+        longitude=33.79,
+        category=NodeCategory.ROAD,
+        hardware_profile={"gpu": "jetson"},
+        network_config={"apn": "airtel"},
+        capture_schedule="*/10 * * * *",
+        interest_classes=["vehicle"],
+        pii_mode=PIIMode.STRICT,
+        firmware_version="1.0.0",
+        public_key=b"\x01" * 32,
+        status=NodeStatus.ONLINE,
+        is_enabled=True,
     )
     db_session.add(node)
     await db_session.commit()
@@ -484,13 +490,21 @@ async def test_checksum_mismatch_creates_rejected_batch(db_session):
 
     node_id = uuid4()
     node = Node(
-        id=node_id, node_id=f"node-b2-{uuid4().hex[:6]}",
-        district="Mzuzu", latitude=-11.46, longitude=34.02,
-        category=NodeCategory.AGRI, hardware_profile={"gpu": "jetson"},
-        network_config={"apn": "tnm"}, capture_schedule="*/10 * * * *",
-        interest_classes=["crop"], pii_mode=PIIMode.MODERATE,
-        firmware_version="1.0.0", public_key=b"\x02" * 32,
-        status=NodeStatus.ONLINE, is_enabled=True,
+        id=node_id,
+        node_id=f"node-b2-{uuid4().hex[:6]}",
+        district="Mzuzu",
+        latitude=-11.46,
+        longitude=34.02,
+        category=NodeCategory.AGRI,
+        hardware_profile={"gpu": "jetson"},
+        network_config={"apn": "tnm"},
+        capture_schedule="*/10 * * * *",
+        interest_classes=["crop"],
+        pii_mode=PIIMode.MODERATE,
+        firmware_version="1.0.0",
+        public_key=b"\x02" * 32,
+        status=NodeStatus.ONLINE,
+        is_enabled=True,
     )
     db_session.add(node)
     await db_session.commit()
@@ -517,13 +531,21 @@ async def test_process_batch_collapses_validated_ghost_state(db_session):
 
     node_id = uuid4()
     node = Node(
-        id=node_id, node_id=f"node-b3-{uuid4().hex[:6]}",
-        district="Zomba", latitude=-15.39, longitude=35.34,
-        category=NodeCategory.WILDLIFE, hardware_profile={"gpu": "jetson"},
-        network_config={"apn": "airtel"}, capture_schedule="*/10 * * * *",
-        interest_classes=["animal"], pii_mode=PIIMode.NONE,
-        firmware_version="1.0.0", public_key=b"\x03" * 32,
-        status=NodeStatus.ONLINE, is_enabled=True,
+        id=node_id,
+        node_id=f"node-b3-{uuid4().hex[:6]}",
+        district="Zomba",
+        latitude=-15.39,
+        longitude=35.34,
+        category=NodeCategory.WILDLIFE,
+        hardware_profile={"gpu": "jetson"},
+        network_config={"apn": "airtel"},
+        capture_schedule="*/10 * * * *",
+        interest_classes=["animal"],
+        pii_mode=PIIMode.NONE,
+        firmware_version="1.0.0",
+        public_key=b"\x03" * 32,
+        status=NodeStatus.ONLINE,
+        is_enabled=True,
     )
     db_session.add(node)
     await db_session.commit()
@@ -544,9 +566,8 @@ async def test_process_batch_collapses_validated_ghost_state(db_session):
     assert result is True
 
     from sqlalchemy import select
-    result = await db_session.execute(
-        select(IngestionBatch).where(IngestionBatch.batch_id == batch_data["batch_id"])
-    )
+
+    result = await db_session.execute(select(IngestionBatch).where(IngestionBatch.batch_id == batch_data["batch_id"]))
     batch = result.scalar_one()
     assert batch.status == BatchStatus.INGESTED
 
@@ -554,6 +575,7 @@ async def test_process_batch_collapses_validated_ghost_state(db_session):
 # ---------------------------------------------------------------------------
 # Workstream C — Annotation lifecycle
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_auto_label_creates_annotation_records(db_session_factory):
@@ -566,13 +588,21 @@ async def test_auto_label_creates_annotation_records(db_session_factory):
 
     async with db_session_factory() as db_session:
         node = Node(
-            id=node_id, node_id=f"node-c1-{uuid4().hex[:6]}",
-            district="Blantyre", latitude=-15.79, longitude=35.00,
-            category=NodeCategory.ROAD, hardware_profile={"gpu": "jetson"},
-            network_config={"apn": "airtel"}, capture_schedule="*/10 * * * *",
-            interest_classes=["vehicle"], pii_mode=PIIMode.STRICT,
-            firmware_version="1.0.0", public_key=b"\x04" * 32,
-            status=NodeStatus.ONLINE, is_enabled=True,
+            id=node_id,
+            node_id=f"node-c1-{uuid4().hex[:6]}",
+            district="Blantyre",
+            latitude=-15.79,
+            longitude=35.00,
+            category=NodeCategory.ROAD,
+            hardware_profile={"gpu": "jetson"},
+            network_config={"apn": "airtel"},
+            capture_schedule="*/10 * * * *",
+            interest_classes=["vehicle"],
+            pii_mode=PIIMode.STRICT,
+            firmware_version="1.0.0",
+            public_key=b"\x04" * 32,
+            status=NodeStatus.ONLINE,
+            is_enabled=True,
         )
         db_session.add(node)
         await db_session.commit()
@@ -593,17 +623,16 @@ async def test_auto_label_creates_annotation_records(db_session_factory):
     assert summary["annotations_created"] == 3
 
     from app.models.annotation import Annotation
+
     async with db_session_factory() as db_session:
-        batch = (await db_session.execute(
-            select(IngestionBatch).where(IngestionBatch.batch_id == batch_id)
-        )).scalar_one()
-        result = await db_session.execute(
-            select(Annotation).where(Annotation.batch_id == batch.id)
-        )
+        batch = (
+            await db_session.execute(select(IngestionBatch).where(IngestionBatch.batch_id == batch_id))
+        ).scalar_one()
+        result = await db_session.execute(select(Annotation).where(Annotation.batch_id == batch.id))
         annotations = result.scalars().all()
     assert len(annotations) == 3
     for a in annotations:
-        status_val = a.status.value if hasattr(a.status, 'value') else a.status
+        status_val = a.status.value if hasattr(a.status, "value") else a.status
         assert status_val == AnnotationStatus.PENDING.value
 
 
@@ -614,49 +643,77 @@ async def test_rejected_annotation_can_be_reassigned_for_rework(db_session):
 
     node_id = uuid4()
     node = Node(
-        id=node_id, node_id=f"node-c2-{uuid4().hex[:6]}",
-        district="Mangochi", latitude=-14.48, longitude=35.26,
-        category=NodeCategory.DOC, hardware_profile={"gpu": "jetson"},
-        network_config={"apn": "airtel"}, capture_schedule="*/10 * * * *",
-        interest_classes=["building"], pii_mode=PIIMode.MODERATE,
-        firmware_version="1.0.0", public_key=b"\x05" * 32,
-        status=NodeStatus.ONLINE, is_enabled=True,
+        id=node_id,
+        node_id=f"node-c2-{uuid4().hex[:6]}",
+        district="Mangochi",
+        latitude=-14.48,
+        longitude=35.26,
+        category=NodeCategory.DOC,
+        hardware_profile={"gpu": "jetson"},
+        network_config={"apn": "airtel"},
+        capture_schedule="*/10 * * * *",
+        interest_classes=["building"],
+        pii_mode=PIIMode.MODERATE,
+        firmware_version="1.0.0",
+        public_key=b"\x05" * 32,
+        status=NodeStatus.ONLINE,
+        is_enabled=True,
     )
     db_session.add(node)
     await db_session.commit()
 
     batch = IngestionBatch(
-        id=uuid4(), batch_id=f"BATCH-C2-{uuid4().hex[:8]}",
-        node_id=node_id, hub_id="hub-c2", event_count=1,
-        file_size_bytes=100, checksum_sha256="d" * 64,
-        node_signature=b"", compression_codec="h265",
-        status=BatchStatus.INGESTED, quality_scores={},
+        id=uuid4(),
+        batch_id=f"BATCH-C2-{uuid4().hex[:8]}",
+        node_id=node_id,
+        hub_id="hub-c2",
+        event_count=1,
+        file_size_bytes=100,
+        checksum_sha256="d" * 64,
+        node_signature=b"",
+        compression_codec="h265",
+        status=BatchStatus.INGESTED,
+        quality_scores={},
     )
     db_session.add(batch)
     await db_session.commit()
 
     annotator = User(
-        id=uuid4(), email=f"c2-ann-{uuid4().hex[:6]}@test.com",
-        hashed_password="x" * 60, full_name="Annotator",
-        role="ANNOTATOR", dpa_signed=True, credit_balance_usd=Decimal("0"),
+        id=uuid4(),
+        email=f"c2-ann-{uuid4().hex[:6]}@test.com",
+        hashed_password="x" * 60,
+        full_name="Annotator",
+        role="ANNOTATOR",
+        dpa_signed=True,
+        credit_balance_usd=Decimal("0"),
     )
     reviewer = User(
-        id=uuid4(), email=f"c2-qa-{uuid4().hex[:6]}@test.com",
-        hashed_password="x" * 60, full_name="QA Reviewer",
-        role="QA", dpa_signed=True, credit_balance_usd=Decimal("0"),
+        id=uuid4(),
+        email=f"c2-qa-{uuid4().hex[:6]}@test.com",
+        hashed_password="x" * 60,
+        full_name="QA Reviewer",
+        role="QA",
+        dpa_signed=True,
+        credit_balance_usd=Decimal("0"),
     )
     db_session.add_all([annotator, reviewer])
     await db_session.commit()
 
     annotation = Annotation(
-        id=uuid4(), batch_id=batch.id, image_index=0,
-        image_path="test/0.jpg", thumbnail_path="test/0_thumb.jpg",
-        detected_objects={}, auto_labels={},
+        id=uuid4(),
+        batch_id=batch.id,
+        image_index=0,
+        image_path="test/0.jpg",
+        thumbnail_path="test/0_thumb.jpg",
+        detected_objects={},
+        auto_labels={},
         human_labels={"car": {"bbox": [0, 0, 10, 10]}},
         qa_labels={"car": {"bbox": [99, 99, 100, 100]}},
         status=AnnotationStatus.REJECTED,
-        quality_score=0.5, iaa_score=0.3,
-        annotator_id=annotator.id, qa_reviewer_id=reviewer.id,
+        quality_score=0.5,
+        iaa_score=0.3,
+        annotator_id=annotator.id,
+        qa_reviewer_id=reviewer.id,
     )
     db_session.add(annotation)
     await db_session.commit()
@@ -670,6 +727,7 @@ async def test_rejected_annotation_can_be_reassigned_for_rework(db_session):
 # ---------------------------------------------------------------------------
 # Workstream D — Consent lifecycle
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_expired_consent_gets_expired_status(db_session):
@@ -708,11 +766,10 @@ async def test_expired_consent_gets_expired_status(db_session):
     assert count >= 1
 
     from sqlalchemy import select
-    result = await db_session.execute(
-        select(ConsentLedger).where(ConsentLedger.id == expired_consent.id)
-    )
+
+    result = await db_session.execute(select(ConsentLedger).where(ConsentLedger.id == expired_consent.id))
     original = result.scalar_one()
-    original_status = original.status.value if hasattr(original.status, 'value') else original.status
+    original_status = original.status.value if hasattr(original.status, "value") else original.status
     assert original_status == ConsentStatus.ACTIVE.value
 
     expired_result = await db_session.execute(
@@ -752,8 +809,11 @@ async def test_withdrawal_uses_for_update_preventing_duplicates(db_session):
     assert result["consents_withdrawn"] == 3
 
     from sqlalchemy import func, select
+
     withdrawal_count = await db_session.execute(
-        select(func.count()).select_from(ConsentLedger).where(
+        select(func.count())
+        .select_from(ConsentLedger)
+        .where(
             ConsentLedger.subject_hash == subject_hash,
             ConsentLedger.status == ConsentStatus.WITHDRAWN,
         )
@@ -765,21 +825,30 @@ async def test_withdrawal_uses_for_update_preventing_duplicates(db_session):
 # Workstream E — Dataset publishing gate
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_publish_dataset_transitions_ready_to_for_sale(db_session):
     """H4: READY datasets must be publishable to FOR_SALE."""
     from app.services.catalog import publish_dataset
 
     ds = Dataset(
-        id=uuid4(), dataset_id=f"ds-e1-{uuid4().hex[:6]}",
-        name="E1 Test Dataset", version="1.0",
-        status=DatasetStatus.READY, sample_count=20,
-        classes={"car": 2, "person": 1}, annotations_per_image=1.0,
-        image_width=640, image_height=480,
+        id=uuid4(),
+        dataset_id=f"ds-e1-{uuid4().hex[:6]}",
+        name="E1 Test Dataset",
+        version="1.0",
+        status=DatasetStatus.READY,
+        sample_count=20,
+        classes={"car": 2, "person": 1},
+        annotations_per_image=1.0,
+        image_width=640,
+        image_height=480,
         geographic_coverage={"countries": ["MW"]},
-        demographic_report={}, consent_coverage_pct=1.0,
-        pii_scrub_verified=True, iaa_score=0.95,
-        formats=["COCO"], price_usd=Decimal("100.00"),
+        demographic_report={},
+        consent_coverage_pct=1.0,
+        pii_scrub_verified=True,
+        iaa_score=0.95,
+        formats=["COCO"],
+        price_usd=Decimal("100.00"),
         license_type=LicenseType.ANNUAL,
     )
     db_session.add(ds)
@@ -789,9 +858,10 @@ async def test_publish_dataset_transitions_ready_to_for_sale(db_session):
     assert resp.status == DatasetStatus.FOR_SALE.value
 
     from sqlalchemy import select
+
     result = await db_session.execute(select(Dataset).where(Dataset.id == ds.id))
     updated = result.scalar_one()
-    updated_status = updated.status.value if hasattr(updated.status, 'value') else updated.status
+    updated_status = updated.status.value if hasattr(updated.status, "value") else updated.status
     assert updated_status == DatasetStatus.FOR_SALE.value
 
 
@@ -801,15 +871,23 @@ async def test_publish_rejects_non_ready_dataset(db_session):
     from app.services.catalog import publish_dataset
 
     ds = Dataset(
-        id=uuid4(), dataset_id=f"ds-e2-{uuid4().hex[:6]}",
-        name="E2 Building Dataset", version="1.0",
-        status=DatasetStatus.BUILDING, sample_count=10,
-        classes={"car": 1}, annotations_per_image=1.0,
-        image_width=640, image_height=480,
+        id=uuid4(),
+        dataset_id=f"ds-e2-{uuid4().hex[:6]}",
+        name="E2 Building Dataset",
+        version="1.0",
+        status=DatasetStatus.BUILDING,
+        sample_count=10,
+        classes={"car": 1},
+        annotations_per_image=1.0,
+        image_width=640,
+        image_height=480,
         geographic_coverage={"countries": ["MW"]},
-        demographic_report={}, consent_coverage_pct=1.0,
-        pii_scrub_verified=False, iaa_score=0.0,
-        formats=["COCO"], price_usd=Decimal("50.00"),
+        demographic_report={},
+        consent_coverage_pct=1.0,
+        pii_scrub_verified=False,
+        iaa_score=0.0,
+        formats=["COCO"],
+        price_usd=Decimal("50.00"),
         license_type=LicenseType.ANNUAL,
     )
     db_session.add(ds)
@@ -823,6 +901,7 @@ async def test_publish_rejects_non_ready_dataset(db_session):
 # Workstream F — Wage calculation
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_pay_annotators_uses_decimal_and_applies_minimum_wage():
     """M13: pay_annotators_task must use Decimal MWK wage and credit annotators."""
@@ -831,43 +910,67 @@ async def test_pay_annotators_uses_decimal_and_applies_minimum_wage():
 
     async with async_session() as writer:
         annotator = User(
-            id=uuid4(), email=f"f1-ann-{uuid4().hex[:6]}@test.com",
-            hashed_password="x" * 60, full_name="F1 Annotator",
-            role="ANNOTATOR", dpa_signed=True, credit_balance_usd=Decimal("0"),
+            id=uuid4(),
+            email=f"f1-ann-{uuid4().hex[:6]}@test.com",
+            hashed_password="x" * 60,
+            full_name="F1 Annotator",
+            role="ANNOTATOR",
+            dpa_signed=True,
+            credit_balance_usd=Decimal("0"),
         )
         writer.add(annotator)
         await writer.commit()
 
         node = Node(
-            id=uuid4(), node_id=f"node-f1-{uuid4().hex[:6]}",
-            district="Lilongwe", latitude=-13.96, longitude=33.79,
-            category=NodeCategory.ROAD, hardware_profile={"gpu": "jetson"},
-            network_config={"apn": "airtel"}, capture_schedule="*/10 * * * *",
-            interest_classes=["vehicle"], pii_mode=PIIMode.STRICT,
-            firmware_version="1.0.0", public_key=b"\x06" * 32,
-            status=NodeStatus.ONLINE, is_enabled=True,
+            id=uuid4(),
+            node_id=f"node-f1-{uuid4().hex[:6]}",
+            district="Lilongwe",
+            latitude=-13.96,
+            longitude=33.79,
+            category=NodeCategory.ROAD,
+            hardware_profile={"gpu": "jetson"},
+            network_config={"apn": "airtel"},
+            capture_schedule="*/10 * * * *",
+            interest_classes=["vehicle"],
+            pii_mode=PIIMode.STRICT,
+            firmware_version="1.0.0",
+            public_key=b"\x06" * 32,
+            status=NodeStatus.ONLINE,
+            is_enabled=True,
         )
         writer.add(node)
         await writer.commit()
 
         batch = IngestionBatch(
-            id=uuid4(), batch_id=f"BATCH-F1-{uuid4().hex[:8]}",
-            node_id=node.id, hub_id="hub-f1", event_count=2,
-            file_size_bytes=100, checksum_sha256="f" * 64,
-            node_signature=b"", compression_codec="h265",
-            status=BatchStatus.INGESTED, quality_scores={},
+            id=uuid4(),
+            batch_id=f"BATCH-F1-{uuid4().hex[:8]}",
+            node_id=node.id,
+            hub_id="hub-f1",
+            event_count=2,
+            file_size_bytes=100,
+            checksum_sha256="f" * 64,
+            node_signature=b"",
+            compression_codec="h265",
+            status=BatchStatus.INGESTED,
+            quality_scores={},
         )
         writer.add(batch)
         await writer.commit()
 
         for i in range(2):
             ann = Annotation(
-                id=uuid4(), batch_id=batch.id, image_index=i,
-                image_path=f"f1/{i}.jpg", thumbnail_path=f"f1/{i}_thumb.jpg",
-                detected_objects={}, auto_labels={},
+                id=uuid4(),
+                batch_id=batch.id,
+                image_index=i,
+                image_path=f"f1/{i}.jpg",
+                thumbnail_path=f"f1/{i}_thumb.jpg",
+                detected_objects={},
+                auto_labels={},
                 status=AnnotationStatus.CERTIFIED,
-                quality_score=1.0, iaa_score=1.0,
-                annotator_id=annotator.id, is_certified=True,
+                quality_score=1.0,
+                iaa_score=1.0,
+                annotator_id=annotator.id,
+                is_certified=True,
             )
             writer.add(ann)
         await writer.commit()
@@ -877,6 +980,7 @@ async def test_pay_annotators_uses_decimal_and_applies_minimum_wage():
 
     async with async_session() as reader:
         from sqlalchemy import select
+
         result = await reader.execute(select(User).where(User.id == annotator.id))
         paid = result.scalar_one()
         assert paid.credit_balance_usd > Decimal("0")
@@ -885,6 +989,7 @@ async def test_pay_annotators_uses_decimal_and_applies_minimum_wage():
 # ---------------------------------------------------------------------------
 # Stuck batch reconciliation
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_stuck_pending_batch_gets_redispatched(db_session_factory):
@@ -899,32 +1004,45 @@ async def test_stuck_pending_batch_gets_redispatched(db_session_factory):
 
     async with db_session_factory() as db_session:
         node = Node(
-            id=node_id, node_id=f"node-recon-{uuid4().hex[:6]}",
-            district="Blantyre", latitude=-15.79, longitude=35.00,
-            category=NodeCategory.ROAD, hardware_profile={"gpu": "jetson"},
-            network_config={"apn": "airtel"}, capture_schedule="*/10 * * * *",
-            interest_classes=["vehicle"], pii_mode=PIIMode.STRICT,
-            firmware_version="1.0.0", public_key=b"\x05" * 32,
-            status=NodeStatus.ONLINE, is_enabled=True,
+            id=node_id,
+            node_id=f"node-recon-{uuid4().hex[:6]}",
+            district="Blantyre",
+            latitude=-15.79,
+            longitude=35.00,
+            category=NodeCategory.ROAD,
+            hardware_profile={"gpu": "jetson"},
+            network_config={"apn": "airtel"},
+            capture_schedule="*/10 * * * *",
+            interest_classes=["vehicle"],
+            pii_mode=PIIMode.STRICT,
+            firmware_version="1.0.0",
+            public_key=b"\x05" * 32,
+            status=NodeStatus.ONLINE,
+            is_enabled=True,
         )
         db_session.add(node)
         await db_session.commit()
 
-        old_time = datetime.now(UTC) - timedelta(
-            minutes=settings.STUCK_BATCH_THRESHOLD_MINUTES + 10
-        )
+        old_time = datetime.now(UTC) - timedelta(minutes=settings.STUCK_BATCH_THRESHOLD_MINUTES + 10)
         batch = IngestionBatch(
-            id=uuid4(), batch_id=batch_id,
-            node_id=node_id, hub_id="hub-recon",
-            event_count=2, file_size_bytes=100, checksum_sha256="e" * 64,
-            node_signature=b"", compression_codec="h265",
-            status=BatchStatus.PENDING, quality_scores={},
+            id=uuid4(),
+            batch_id=batch_id,
+            node_id=node_id,
+            hub_id="hub-recon",
+            event_count=2,
+            file_size_bytes=100,
+            checksum_sha256="e" * 64,
+            node_signature=b"",
+            compression_codec="h265",
+            status=BatchStatus.PENDING,
+            quality_scores={},
         )
         batch.created_at = old_time
         db_session.add(batch)
         await db_session.commit()
 
     from app.workers.tasks import auto_label_task
+
     with patch.object(auto_label_task, "delay") as mock_delay:
         mock_delay.return_value = uuid4()
         redispatched = await _reconcile_stuck_batches_async()
@@ -943,36 +1061,49 @@ async def test_recent_pending_batch_is_left_alone(db_session):
 
     node_id = uuid4()
     node = Node(
-        id=node_id, node_id=f"node-recent-{uuid4().hex[:6]}",
-        district="Blantyre", latitude=-15.79, longitude=35.00,
-        category=NodeCategory.ROAD, hardware_profile={"gpu": "jetson"},
-        network_config={"apn": "airtel"}, capture_schedule="*/10 * * * *",
-        interest_classes=["vehicle"], pii_mode=PIIMode.STRICT,
-        firmware_version="1.0.0", public_key=b"\x06" * 32,
-        status=NodeStatus.ONLINE, is_enabled=True,
+        id=node_id,
+        node_id=f"node-recent-{uuid4().hex[:6]}",
+        district="Blantyre",
+        latitude=-15.79,
+        longitude=35.00,
+        category=NodeCategory.ROAD,
+        hardware_profile={"gpu": "jetson"},
+        network_config={"apn": "airtel"},
+        capture_schedule="*/10 * * * *",
+        interest_classes=["vehicle"],
+        pii_mode=PIIMode.STRICT,
+        firmware_version="1.0.0",
+        public_key=b"\x06" * 32,
+        status=NodeStatus.ONLINE,
+        is_enabled=True,
     )
     db_session.add(node)
     await db_session.commit()
 
     batch = IngestionBatch(
-        id=uuid4(), batch_id=f"batch-recent-{uuid4().hex[:8]}",
-        node_id=node_id, hub_id="hub-recent",
-        event_count=1, file_size_bytes=50, checksum_sha256="g" * 64,
-        node_signature=b"", compression_codec="h265",
-        status=BatchStatus.PENDING, quality_scores={},
+        id=uuid4(),
+        batch_id=f"batch-recent-{uuid4().hex[:8]}",
+        node_id=node_id,
+        hub_id="hub-recent",
+        event_count=1,
+        file_size_bytes=50,
+        checksum_sha256="g" * 64,
+        node_signature=b"",
+        compression_codec="h265",
+        status=BatchStatus.PENDING,
+        quality_scores={},
     )
     # created_at defaults to now — well within the threshold
     db_session.add(batch)
     await db_session.commit()
 
     from app.workers.tasks import auto_label_task
+
     with patch.object(auto_label_task, "delay") as mock_delay:
         redispatched = await _reconcile_stuck_batches_async()
 
     assert not any(r["batch_id"] == batch.batch_id for r in redispatched)
-    assert not any(
-        call.args[0] == str(batch.id) for call in mock_delay.call_args_list
-    )
+    assert not any(call.args[0] == str(batch.id) for call in mock_delay.call_args_list)
 
 
 @pytest.mark.asyncio
@@ -988,32 +1119,45 @@ async def test_non_pending_batch_is_never_touched(db_session_factory):
 
     async with db_session_factory() as db_session:
         node = Node(
-            id=node_id, node_id=f"node-olding-{uuid4().hex[:6]}",
-            district="Blantyre", latitude=-15.79, longitude=35.00,
-            category=NodeCategory.ROAD, hardware_profile={"gpu": "jetson"},
-            network_config={"apn": "airtel"}, capture_schedule="*/10 * * * *",
-            interest_classes=["vehicle"], pii_mode=PIIMode.STRICT,
-            firmware_version="1.0.0", public_key=b"\x07" * 32,
-            status=NodeStatus.ONLINE, is_enabled=True,
+            id=node_id,
+            node_id=f"node-olding-{uuid4().hex[:6]}",
+            district="Blantyre",
+            latitude=-15.79,
+            longitude=35.00,
+            category=NodeCategory.ROAD,
+            hardware_profile={"gpu": "jetson"},
+            network_config={"apn": "airtel"},
+            capture_schedule="*/10 * * * *",
+            interest_classes=["vehicle"],
+            pii_mode=PIIMode.STRICT,
+            firmware_version="1.0.0",
+            public_key=b"\x07" * 32,
+            status=NodeStatus.ONLINE,
+            is_enabled=True,
         )
         db_session.add(node)
         await db_session.commit()
 
-        old_time = datetime.now(UTC) - timedelta(
-            minutes=settings.STUCK_BATCH_THRESHOLD_MINUTES + 60
-        )
+        old_time = datetime.now(UTC) - timedelta(minutes=settings.STUCK_BATCH_THRESHOLD_MINUTES + 60)
         batch = IngestionBatch(
-            id=uuid4(), batch_id=batch_id,
-            node_id=node_id, hub_id="hub-old",
-            event_count=3, file_size_bytes=200, checksum_sha256="h" * 64,
-            node_signature=b"", compression_codec="h265",
-            status=BatchStatus.INGESTED, quality_scores={},
+            id=uuid4(),
+            batch_id=batch_id,
+            node_id=node_id,
+            hub_id="hub-old",
+            event_count=3,
+            file_size_bytes=200,
+            checksum_sha256="h" * 64,
+            node_signature=b"",
+            compression_codec="h265",
+            status=BatchStatus.INGESTED,
+            quality_scores={},
         )
         batch.created_at = old_time
         db_session.add(batch)
         await db_session.commit()
 
     from app.workers.tasks import auto_label_task
+
     with patch.object(auto_label_task, "delay"):
         redispatched = await _reconcile_stuck_batches_async()
 

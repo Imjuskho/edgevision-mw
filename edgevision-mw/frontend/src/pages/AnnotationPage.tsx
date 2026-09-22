@@ -8,6 +8,7 @@ import AnnotationCanvas from "../components/AnnotationCanvas";
 import { AnnotateWorkspace, type WorkspaceDrawTool } from "../components/annotate/AnnotateWorkspace";
 import { BatchInferenceAction } from "../components/BatchInferenceAction";
 import { Button } from "../components/ui/Button";
+import { IconButton } from "../components/ui/IconButton";
 import { Modal } from "../components/ui/Modal";
 import { Badge } from "../components/ui/Badge";
 import { EmptyState } from "../components/ui/EmptyState";
@@ -15,10 +16,12 @@ import { useAIAssist } from "../hooks/useAIAssist";
 import { useResilientSave } from "../hooks/useResilientSave";
 import { useAnnotateKeyboard } from "../hooks/useAnnotateKeyboard";
 import { useOfflineSync } from "../hooks/useOfflineSync";
-import { Upload } from "lucide-react";
+import { Upload, Trash2 } from "lucide-react";
 import { detectedObjectsToBoxes } from "../utils/annotationCoords";
+import { shallowEqualBoxes, cloneBoxes } from "../utils/shallowEqualBoxes";
 
 const PAGE_SIZE = 50;
+const UNDO_MAX = 50;
 
 interface Props {
   sessionId: string;
@@ -44,7 +47,7 @@ export default function AnnotationPage({
   const { setDirty } = useUnsavedWork();
   const { saveBboxAnnotations } = useResilientSave(sessionId);
   const { stats } = useOfflineSync(sessionId);
-  const savedSnapshotRef = useRef("[]");
+  const [savedSnapshot, setSavedSnapshot] = useState<BBox[]>([]);
   const [images, setImages] = useState<ImageItem[]>([]);
   const [currentIndex, setCurrentIndex] = useState(imageIndex);
   const [boxes, setBoxes] = useState<BBox[]>([]);
@@ -59,6 +62,63 @@ export default function AnnotationPage({
   const [drawTool, setDrawTool] = useState<WorkspaceDrawTool>("bbox");
   const [aiDraft, setAiDraft] = useState(false);
 
+  const undoStackRef = useRef<BBox[][]>([]);
+  const redoStackRef = useRef<BBox[][]>([]);
+  const isCanvasInteractionRef = useRef(false);
+  const dragSnapshotRef = useRef<BBox[] | null>(null);
+
+  const pushUndo = useCallback((currentBoxes: BBox[]) => {
+    undoStackRef.current = [...undoStackRef.current.slice(-(UNDO_MAX - 1)), cloneBoxes(currentBoxes)];
+    redoStackRef.current = [];
+  }, []);
+
+  const onCanvasMouseDown = useCallback(() => {
+    isCanvasInteractionRef.current = true;
+    dragSnapshotRef.current = cloneBoxes(boxes);
+  }, [boxes]);
+
+  const onCanvasMouseUp = useCallback(() => {
+    if (dragSnapshotRef.current) {
+      const snapshot = dragSnapshotRef.current;
+      dragSnapshotRef.current = null;
+      if (!shallowEqualBoxes(snapshot, boxes)) {
+        pushUndo(snapshot);
+      }
+    }
+    isCanvasInteractionRef.current = false;
+  }, [boxes, pushUndo]);
+
+  useEffect(() => {
+    const el = document.querySelector(".annotate-canvas-wrap");
+    if (!el) return;
+    el.addEventListener("mousedown", onCanvasMouseDown);
+    el.addEventListener("mouseup", onCanvasMouseUp);
+    el.addEventListener("mouseleave", onCanvasMouseUp);
+    return () => {
+      el.removeEventListener("mousedown", onCanvasMouseDown);
+      el.removeEventListener("mouseup", onCanvasMouseUp);
+      el.removeEventListener("mouseleave", onCanvasMouseUp);
+    };
+  }, [onCanvasMouseDown, onCanvasMouseUp]);
+
+  const undo = useCallback(() => {
+    const stack = undoStackRef.current;
+    if (stack.length === 0) return;
+    const prev = stack[stack.length - 1];
+    undoStackRef.current = stack.slice(0, -1);
+    redoStackRef.current = [...redoStackRef.current.slice(-(UNDO_MAX - 1)), cloneBoxes(boxes)];
+    setBoxes(prev);
+  }, [boxes]);
+
+  const redo = useCallback(() => {
+    const stack = redoStackRef.current;
+    if (stack.length === 0) return;
+    const next = stack[stack.length - 1];
+    redoStackRef.current = stack.slice(0, -1);
+    undoStackRef.current = [...undoStackRef.current.slice(-(UNDO_MAX - 1)), cloneBoxes(boxes)];
+    setBoxes(next);
+  }, [boxes]);
+
   const {
     isModelLoading,
     loadProgress,
@@ -69,20 +129,28 @@ export default function AnnotationPage({
     aiDetectAll,
   } = useAIAssist(taxonomyContext);
 
-  const isDirty = JSON.stringify(boxes) !== savedSnapshotRef.current;
+  const isDirty = !shallowEqualBoxes(boxes, savedSnapshot);
 
   useEffect(() => {
-    setDirty(isDirty);
+    const sync = async () => {
+      setDirty(isDirty);
+    };
+    void sync();
   }, [isDirty, setDirty]);
+
+  const [prevResetKey, setPrevResetKey] = useState(`${sessionId}|${datasetId}`);
+  if (`${sessionId}|${datasetId}` !== prevResetKey) {
+    setPrevResetKey(`${sessionId}|${datasetId}`);
+    setSavedSnapshot([]);
+  }
 
   useEffect(() => {
     setDirty(false);
-    savedSnapshotRef.current = "[]";
   }, [sessionId, datasetId, setDirty]);
 
   const markSaved = useCallback(
     (nextBoxes: BBox[]) => {
-      savedSnapshotRef.current = JSON.stringify(nextBoxes);
+      setSavedSnapshot(nextBoxes.map((b) => ({ ...b, polygon: b.polygon ? [...b.polygon] : undefined })));
       setDirty(false);
     },
     [setDirty],
@@ -104,14 +172,23 @@ export default function AnnotationPage({
     }
   }, [datasetId, showToast, t]);
 
-  useEffect(() => {
+  const [prevDatasetId, setPrevDatasetId] = useState(datasetId);
+  if (datasetId !== prevDatasetId) {
+    setPrevDatasetId(datasetId);
     setPage(1);
-    loadImages(1);
-  }, [loadImages]);
+  }
+  const [prevImageIndex, setPrevImageIndex] = useState(imageIndex);
+  if (imageIndex !== prevImageIndex) {
+    setPrevImageIndex(imageIndex);
+    setCurrentIndex(imageIndex);
+  }
 
   useEffect(() => {
-    setCurrentIndex(imageIndex);
-  }, [imageIndex]);
+    const load = async () => {
+      await loadImages(1);
+    };
+    void load();
+  }, [loadImages]);
 
   const currentImage = images[currentIndex];
 
@@ -151,17 +228,24 @@ export default function AnnotationPage({
   }, [markSaved]);
 
   useEffect(() => {
-    if (currentImage?.annotation_id) {
-      void loadAnnotations(currentImage.annotation_id);
-    } else {
-      setBoxes([]);
-      markSaved([]);
-    }
-  }, [currentIndex, currentImage?.annotation_id, loadAnnotations, markSaved]);
+    const run = async () => {
+      if (!currentImage?.annotation_id) {
+        setBoxes([]);
+        markSaved([]);
+        return;
+      }
+      await loadAnnotations(currentImage.annotation_id);
+    };
+    void run();
+  }, [currentImage?.annotation_id, loadAnnotations, markSaved]);
 
   useEffect(() => {
     if (currentIndex >= images.length - 2 && totalImages > images.length) {
-      loadImages(page + 1).then(() => setPage((p) => p + 1));
+      const loadMore = async () => {
+        await loadImages(page + 1);
+        setPage((p) => p + 1);
+      };
+      void loadMore();
     }
   }, [currentIndex, images.length, totalImages, page, loadImages]);
 
@@ -240,6 +324,8 @@ export default function AnnotationPage({
     onNext: goNext,
     onPrev: goPrev,
     onNextUnlabeled: goNextUnlabeled,
+    onUndo: undo,
+    onRedo: redo,
   });
 
   const handleAiDetectAll = async () => {
@@ -296,6 +382,41 @@ export default function AnnotationPage({
     showToast(t("annotation.preLabelDismissed"), "info");
   };
 
+  const handleDeleteBox = useCallback((index: number) => {
+    const updated = boxes.filter((_, i) => i !== index);
+    setBoxes(updated);
+  }, [boxes]);
+
+  const annotationListPanel = (
+    <div role="list" aria-label={t("annotation.annotationList", "Current annotations")}>
+      <h3 className="text-h3">{t("annotation.annotationList", "Current annotations")}</h3>
+      {boxes.length === 0 && (
+        <p className="text-caption">{t("annotation.noAnnotations", "No annotations yet.")}</p>
+      )}
+      {boxes.map((box, i) => (
+        <div
+          key={i}
+          role="listitem"
+          className="annotate-annotation-list-item"
+          tabIndex={0}
+          aria-label={`${box.label}, ${t("annotation.coordsSummary", "x:{{x}}% y:{{y}}% w:{{w}}% h:{{h}}%", { x: Math.round(box.x * 100), y: Math.round(box.y * 100), w: Math.round(box.width * 100), h: Math.round(box.height * 100) })}`}
+        >
+          <span className="annotate-annotation-list-label">{box.label}</span>
+          <span className="annotate-annotation-list-coords text-mono text-xs">
+            {Math.round(box.x * 100)},{Math.round(box.y * 100)} {Math.round(box.width * 100)}×{Math.round(box.height * 100)}%
+          </span>
+          <IconButton
+            label={t("annotation.deleteAnnotation", "Delete annotation")}
+            size="sm"
+            onClick={() => handleDeleteBox(i)}
+          >
+            <Trash2 size={12} />
+          </IconButton>
+        </div>
+      ))}
+    </div>
+  );
+
   if (!currentImage) {
     const emptyMessage =
       images.length === 0 && totalImages === 0
@@ -344,6 +465,7 @@ export default function AnnotationPage({
         pendingSync={stats.pending}
         drawTool={drawTool}
         onDrawToolChange={setDrawTool}
+        inspector={annotationListPanel}
         saveStatus={
           aiDraft ? (
             <Badge variant="info">{t("annotation.liveAiDraft", "AI prelabels — edit & save to confirm")}</Badge>

@@ -29,6 +29,4 @@ class ExperimentEvent(TimestampMixin, Base):
     variant_id: Mapped[str] = mapped_column(String(100), nullable=False)
     event_type: Mapped[str] = mapped_column(String(20), nullable=False)
     metadata_json: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
-    occurred_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False
-    )
+    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

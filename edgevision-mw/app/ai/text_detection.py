@@ -13,6 +13,7 @@ def flip_coords(bbox: list[int | float], width: int, height: int | None = None) 
     x1, y1, x2, y2 = bbox
     return [width - x2, y1, width - x1, y2]
 
+
 try:
     import pytesseract
 
@@ -60,18 +61,22 @@ def _detect_text_regions_opencv(image: np.ndarray) -> list[dict]:
         if aspect < 1.5 and area < (w * h * 0.02):
             continue
 
-        results.append({
-            "bbox": [int(x), int(y), int(x + bw), int(y + bh)],
-            "confidence": 0.0,
-            "text": "",
-            "method": "opencv_contour",
-        })
+        results.append(
+            {
+                "bbox": [int(x), int(y), int(x + bw), int(y + bh)],
+                "confidence": 0.0,
+                "text": "",
+                "method": "opencv_contour",
+            }
+        )
 
     return results
 
 
 def _ocr_tesseract(image: np.ndarray) -> list[dict]:
-    config = "--oem 3 --psm 6 -c tessedit_char_whitelist=0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-./ "
+    config = (
+        "--oem 3 --psm 6 -c tessedit_char_whitelist=0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-./ "
+    )
     data = pytesseract.image_to_data(image, config=config, output_type=pytesseract.Output.DICT)
 
     results = []
@@ -84,12 +89,14 @@ def _ocr_tesseract(image: np.ndarray) -> list[dict]:
         x, y, bw, bh = data["left"][i], data["top"][i], data["width"][i], data["height"][i]
         if bw < 5 or bh < 5:
             continue
-        results.append({
-            "bbox": [int(x), int(y), int(x + bw), int(y + bh)],
-            "confidence": round(conf, 4),
-            "text": text,
-            "method": "tesseract",
-        })
+        results.append(
+            {
+                "bbox": [int(x), int(y), int(x + bw), int(y + bh)],
+                "confidence": round(conf, 4),
+                "text": text,
+                "method": "tesseract",
+            }
+        )
 
     return results
 
@@ -128,12 +135,14 @@ def detect_signs(image: np.ndarray) -> list[dict]:
             sign_roi = image[y : y + bh, x : x + bw]
             ocr_results = _ocr_tesseract(sign_roi) if _HAS_TESSERACT else []
 
-            signs.append({
-                "bbox": [int(x), int(y), int(x + bw), int(y + bh)],
-                "color_class": name,
-                "confidence": round(min(area / (w * h) * 10, 1.0), 4),
-                "ocr_text": ocr_results[0]["text"] if ocr_results else "",
-                "ocr_confidence": ocr_results[0]["confidence"] if ocr_results else 0.0,
-            })
+            signs.append(
+                {
+                    "bbox": [int(x), int(y), int(x + bw), int(y + bh)],
+                    "color_class": name,
+                    "confidence": round(min(area / (w * h) * 10, 1.0), 4),
+                    "ocr_text": ocr_results[0]["text"] if ocr_results else "",
+                    "ocr_confidence": ocr_results[0]["confidence"] if ocr_results else 0.0,
+                }
+            )
 
     return signs

@@ -12,10 +12,10 @@ from tests.test_studio import (
     _create_annotation,
     _create_batch,
     _create_dataset,
-    _create_node,
     _create_user,
     _make_token,
 )
+from tests.conftest import _create_node
 
 
 async def _create_session(test_client, token, ds):
@@ -63,13 +63,17 @@ async def test_review_submit_decision_approved_certifies(db_session, test_client
     assert ann.is_certified is True
 
     actions = (
-        await db_session.execute(
-            select(AnnotationAction).where(
-                AnnotationAction.session_id == session_id,
-                AnnotationAction.annotation_id == ann.id,
+        (
+            await db_session.execute(
+                select(AnnotationAction).where(
+                    AnnotationAction.session_id == session_id,
+                    AnnotationAction.annotation_id == ann.id,
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     action_types = {a.action_type for a in actions}
     assert "review_approved" in action_types
 
@@ -149,8 +153,18 @@ async def test_review_submit_persists_refines(db_session, test_client):
                     "confidence": 0.9,
                     "track_id": 1,
                     "mask": [[0.1, 0.1], [0.5, 0.1], [0.5, 0.5]],
-                    "bbox_3d": {"corners": [[0.1, 0.1, 0], [0.2, 0.1, 0], [0.2, 0.2, 0], [0.1, 0.2, 0],
-                                          [0.1, 0.1, 1], [0.2, 0.1, 1], [0.2, 0.2, 1], [0.1, 0.2, 1]]},
+                    "bbox_3d": {
+                        "corners": [
+                            [0.1, 0.1, 0],
+                            [0.2, 0.1, 0],
+                            [0.2, 0.2, 0],
+                            [0.1, 0.2, 0],
+                            [0.1, 0.1, 1],
+                            [0.2, 0.1, 1],
+                            [0.2, 0.2, 1],
+                            [0.1, 0.2, 1],
+                        ]
+                    },
                 }
             ]
         },
@@ -173,8 +187,14 @@ async def test_review_submit_persists_refines(db_session, test_client):
             "mask": [[0.15, 0.15], [0.55, 0.15], [0.55, 0.55]],
             "bbox_3d": {
                 "corners": [
-                    [0.15, 0.15, 0], [0.25, 0.15, 0], [0.25, 0.25, 0], [0.15, 0.25, 0],
-                    [0.15, 0.15, 1], [0.25, 0.15, 1], [0.25, 0.25, 1], [0.15, 0.25, 1],
+                    [0.15, 0.15, 0],
+                    [0.25, 0.15, 0],
+                    [0.25, 0.25, 0],
+                    [0.15, 0.25, 0],
+                    [0.15, 0.15, 1],
+                    [0.25, 0.15, 1],
+                    [0.25, 0.25, 1],
+                    [0.15, 0.25, 1],
                 ],
             },
         }

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { PageShell } from "../components/PageShell";
 import { studioApi } from "../services/api";
@@ -16,23 +16,22 @@ export default function RoadAnalysisPage({ datasetId }: RoadAnalysisPageProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const loadAnalysis = useCallback(async () => {
-    if (!datasetId) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const resp = await studioApi.analyzeRoadCondition(datasetId);
-      setReport(resp.data as RoadConditionReport);
-    } catch {
-      setError(t("roadAnalysis.failed"));
-    } finally {
-      setLoading(false);
-    }
-  }, [datasetId, t]);
-
   useEffect(() => {
-    if (datasetId) loadAnalysis();
-  }, [datasetId, loadAnalysis]);
+    if (!datasetId) return;
+    const load = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const resp = await studioApi.analyzeRoadCondition(datasetId);
+        setReport(resp.data as RoadConditionReport);
+      } catch {
+        setError(t("roadAnalysis.failed"));
+      } finally {
+        setLoading(false);
+      }
+    };
+    void load();
+  }, [datasetId, t]);
 
   const getConditionTone = (score: number): "good" | "fair" | "poor" => {
     if (score >= 0.7) return "good";

@@ -43,14 +43,14 @@ class DedupResolveRequest(BaseModel):
 
 class ExportPreviewRequest(BaseModel):
     dataset_id: str
-    format: str = Field(..., pattern=r"^(coco|yolo|pascal_voc)$")
+    format: str = Field(..., pattern=r"^(coco|yolo|pascal_voc|kitti|cityscapes)$")
     augmentations: dict | None = None
     sample_size: int = Field(default=10, ge=1, le=50)
 
 
 class ExportBuildRequest(BaseModel):
     dataset_id: str
-    format: str = Field(..., pattern=r"^(coco|yolo|pascal_voc)$")
+    format: str = Field(..., pattern=r"^(coco|yolo|pascal_voc|kitti|cityscapes)$")
     split_ratio: dict[str, float]
     augmentations: dict | None = None
     stratify: list[str] = Field(default_factory=list)

@@ -38,23 +38,27 @@ def _instances_to_schema(instances: list) -> list[InstanceMask]:
     result = []
     for inst in instances:
         if hasattr(inst, "class_id"):
-            result.append(InstanceMask(
-                class_id=inst.class_id,
-                class_name=inst.class_name,
-                confidence=inst.confidence,
-                bbox=inst.bbox,
-                mask_rle=inst.mask_rle,
-                polygon=inst.polygon,
-            ))
+            result.append(
+                InstanceMask(
+                    class_id=inst.class_id,
+                    class_name=inst.class_name,
+                    confidence=inst.confidence,
+                    bbox=inst.bbox,
+                    mask_rle=inst.mask_rle,
+                    polygon=inst.polygon,
+                )
+            )
         elif isinstance(inst, dict):
-            result.append(InstanceMask(
-                class_id=inst["class_id"],
-                class_name=inst["class_name"],
-                confidence=inst["confidence"],
-                bbox=inst["bbox"],
-                mask_rle=inst.get("mask_rle", ""),
-                polygon=inst.get("polygon"),
-            ))
+            result.append(
+                InstanceMask(
+                    class_id=inst["class_id"],
+                    class_name=inst["class_name"],
+                    confidence=inst["confidence"],
+                    bbox=inst["bbox"],
+                    mask_rle=inst.get("mask_rle", ""),
+                    polygon=inst.get("polygon"),
+                )
+            )
     return result
 
 
@@ -84,6 +88,7 @@ async def segment_image(
         raise HTTPException(status_code=500, detail=f"Image fetch failed: {exc}")
 
     import numpy as np
+
     image_np = np.array(pil_image)
 
     device = "gpu" if settings.ENVIRONMENT == "production" else "cpu"
@@ -105,9 +110,7 @@ async def segment_image(
 
     instances = _instances_to_schema(crop_results) + _instances_to_schema(health_results)
 
-    existing = await db.execute(
-        select(AgriAnnotation).where(AgriAnnotation.annotation_id == request.image_id)
-    )
+    existing = await db.execute(select(AgriAnnotation).where(AgriAnnotation.annotation_id == request.image_id))
     existing_aa = existing.scalar_one_or_none()
 
     if existing_aa:
@@ -180,9 +183,7 @@ async def get_agri_result(
     db: AsyncSession = Depends(get_db),
     user: dict = Depends(get_current_user),
 ):
-    result = await db.execute(
-        select(AgriAnnotation).where(AgriAnnotation.annotation_id == annotation_id)
-    )
+    result = await db.execute(select(AgriAnnotation).where(AgriAnnotation.annotation_id == annotation_id))
     aa = result.scalar_one_or_none()
     if aa is None:
         raise HTTPException(status_code=404, detail="Agri annotation not found")
@@ -210,9 +211,7 @@ async def update_agri_result(
     db: AsyncSession = Depends(get_db),
     user: dict = Depends(require_role(["ADMIN", "QA", "ANNOTATOR"])),
 ):
-    result = await db.execute(
-        select(AgriAnnotation).where(AgriAnnotation.annotation_id == annotation_id)
-    )
+    result = await db.execute(select(AgriAnnotation).where(AgriAnnotation.annotation_id == annotation_id))
     aa = result.scalar_one_or_none()
     if aa is None:
         raise HTTPException(status_code=404, detail="Agri annotation not found")
@@ -249,11 +248,23 @@ async def update_agri_result(
 @agri_router.get("/classes", response_model=AgriClassesResponse)
 async def get_agri_classes():
     crop_classes = [
-        {"id": cid, "name": cdef["name"], "color": cdef["color"], "description": cdef["description"], "category": "crop"}
+        {
+            "id": cid,
+            "name": cdef["name"],
+            "color": cdef["color"],
+            "description": cdef["description"],
+            "category": "crop",
+        }
         for cid, cdef in CROP_CLASSES.items()
     ]
     health_classes = [
-        {"id": cid + 100, "name": cdef["name"], "color": cdef["color"], "description": cdef["description"], "category": "health"}
+        {
+            "id": cid + 100,
+            "name": cdef["name"],
+            "color": cdef["color"],
+            "description": cdef["description"],
+            "category": "health",
+        }
         for cid, cdef in HEALTH_CLASSES.items()
     ]
     return AgriClassesResponse(

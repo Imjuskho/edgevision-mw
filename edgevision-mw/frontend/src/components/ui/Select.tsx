@@ -21,6 +21,7 @@ export function Select({
   value,
   options,
   onChange,
+  // i18n: callers should pass a translated placeholder string
   placeholder = "Select…",
   searchable = false,
   "aria-label": ariaLabel,
@@ -64,6 +65,7 @@ export function Select({
               className="ui-input ui-select-filter"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
+              // i18n: callers should pass a translated placeholder via the component API
               placeholder="Filter…"
               autoFocus
             />

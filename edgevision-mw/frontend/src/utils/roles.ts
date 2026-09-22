@@ -8,7 +8,7 @@ export type UserRole =
   | "BUYER"
   | "FIELD_TECH";
 
-/** Labeling + Data — default for field annotators. */
+/** Annotator — labeling views only. */
 export const ANNOTATOR_VIEWS: View[] = [
   "home",
   "annotate",
@@ -17,6 +17,15 @@ export const ANNOTATOR_VIEWS: View[] = [
   "datasets",
   "upload",
   "queue",
+  "settings",
+];
+
+/** Buyer — marketplace + subject views. */
+export const BUYER_VIEWS: View[] = [
+  "home",
+  "datasets",
+  "buyer",
+  "subject",
   "settings",
 ];
 
@@ -42,6 +51,9 @@ export const ADMIN_QA_VIEWS: View[] = [
   "training",
   "export",
   "settings",
+  "operator",
+  "buyer",
+  "subject",
 ];
 
 /** Operator — data pipeline + quality tools. */
@@ -58,6 +70,7 @@ export const OPERATOR_VIEWS: View[] = [
   "training",
   "fleet",
   "settings",
+  "operator",
 ];
 
 /** Route-level role requirements (backend-aligned). */
@@ -96,7 +109,7 @@ export function viewsForRole(role: string | undefined): View[] {
   if (r === "ADMIN" || r === "QA") return ADMIN_QA_VIEWS;
   if (r === "OPERATOR") return OPERATOR_VIEWS;
   if (r === "ANNOTATOR") return ANNOTATOR_VIEWS;
-  // BUYER, FIELD_TECH — conservative defaults
+  if (r === "BUYER") return BUYER_VIEWS;
   if (r === "FIELD_TECH") return ["home", "fleet", "datasets", "settings"];
   return ANNOTATOR_VIEWS;
 }

@@ -40,10 +40,6 @@ interface AnnotatorUser {
   role: string;
 }
 
-interface Props {
-  onNavigate?: (view: string, datasetId?: string) => void;
-}
-
 function assignStatusVariant(status: string): BadgeVariant {
   if (status === "CERTIFIED") return "success";
   if (status === "SUBMITTED") return "warning";
@@ -60,7 +56,7 @@ function rowAccentClass(status: string, overdue: boolean): string {
   return "admin-row-accent--default";
 }
 
-export default function AdminAssignPage({ onNavigate: _onNavigate }: Props) {
+export default function AdminAssignPage() {
   const { t } = useTranslation();
   const { showToast } = useToast();
   const [assignments, setAssignments] = useState<Assignment[]>([]);
@@ -95,24 +91,37 @@ export default function AdminAssignPage({ onNavigate: _onNavigate }: Props) {
     }
   }, [showToast, t]);
 
-  const loadAnnotators = useCallback(async () => {
-    setAnnotatorsLoading(true);
-    setAnnotatorsError(false);
-    try {
-      const resp = await studioApi.listUsers({ role: "ANNOTATOR" });
-      setAnnotators(resp.data ?? []);
-    } catch {
-      setAnnotators([]);
-      setAnnotatorsError(true);
-    } finally {
-      setAnnotatorsLoading(false);
-    }
-  }, []);
-
-  useEffect(() => { void loadAssignments(); }, [loadAssignments]);
   useEffect(() => {
-    if (createOpen) void loadAnnotators();
-  }, [createOpen, loadAnnotators]);
+    const load = async () => {
+      try {
+        const resp = await studioApi.listAssignments();
+        const items = resp.data?.items || resp.data;
+        setAssignments(Array.isArray(items) ? items : []);
+      } catch {
+        setLoadError(true);
+        showToast(t("errors.networkError"), "error");
+      } finally {
+        setLoading(false);
+      }
+    };
+    void load();
+  }, [showToast, t]);
+
+  useEffect(() => {
+    if (!createOpen) return;
+    const load = async () => {
+      try {
+        const resp = await studioApi.listUsers({ role: "ANNOTATOR" });
+        setAnnotators(resp.data ?? []);
+      } catch {
+        setAnnotators([]);
+        setAnnotatorsError(true);
+      } finally {
+        setAnnotatorsLoading(false);
+      }
+    };
+    void load();
+  }, [createOpen]);
 
   const toggleAnnotator = (id: string) => {
     setSelectedAnnotators((prev) =>
@@ -151,7 +160,7 @@ export default function AdminAssignPage({ onNavigate: _onNavigate }: Props) {
       return true;
     });
     list = [...list].sort((a, b) => {
-      let cmp = 0;
+      let cmp: number;
       if (sortKey === "dataset_name") cmp = a.dataset_name.localeCompare(b.dataset_name);
       else if (sortKey === "progress") cmp = a.progress_pct - b.progress_pct;
       else if (sortKey === "priority") cmp = a.priority - b.priority;

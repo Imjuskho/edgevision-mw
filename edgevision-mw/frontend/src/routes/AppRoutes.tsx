@@ -9,21 +9,25 @@ import {
   LazyAgriAnalysisPage,
   LazyAgriTaxonomyPage,
   LazyAnnotationPage,
+  LazyBuyerDashboardPage,
   LazyDatasetBrowser,
   LazyDedupPanel,
   LazyExportPreview,
   LazyHealthDashboard,
   LazyLiveAnnotatePage,
   LazyNodeManagementPage,
+  LazyNotFoundPage,
+  LazyOperatorDashboardPage,
   LazyQueuePage,
   LazyReviewPage,
   LazyRoadAnalysisPage,
   LazyRoadTaxonomyPage,
   LazySegmentPage,
+  LazySettingsPage,
+  LazySubjectPortalPage,
   LazyTrainingPage,
   LazyUploadPage,
-  LazyNotFoundPage,
-  LazySettingsPage,
+  LazyMarketplacePage,
 } from "./lazyPages";
 import { TurboReview } from "../components/TurboReview/TurboReview";
 
@@ -305,6 +309,20 @@ export function AppRoutes({
       <Route path="/nodes" element={<RoleRoute view="fleet"><LazyNodeManagementPage /></RoleRoute>} />
       <Route path="/nodes/:nodeId" element={<RoleRoute view="fleet"><LazyNodeManagementPage /></RoleRoute>} />
       <Route path="/settings" element={<LazySettingsPage />} />
+
+      {/* D1: Operator Console */}
+      <Route path="/operator" element={<LazyOperatorDashboardPage />} />
+      <Route path="/operator/dashboard" element={<LazyOperatorDashboardPage />} />
+
+      {/* D2: Buyer Dashboard */}
+      <Route path="/buyer" element={<LazyBuyerDashboardPage />} />
+      <Route path="/buyer/dashboard" element={<LazyBuyerDashboardPage />} />
+
+      {/* D2b: Marketplace */}
+      <Route path="/marketplace" element={<LazyMarketplacePage />} />
+
+      {/* D3: Subject Portal */}
+      <Route path="/subject/:subjectHash" element={<LazySubjectPortalPage />} />
 
       <Route path="/annotate" element={<Navigate to="/datasets" replace />} />
       <Route path="/agri-annotate" element={<Navigate to="/datasets" replace />} />

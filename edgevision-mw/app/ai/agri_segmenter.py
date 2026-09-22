@@ -72,7 +72,10 @@ class AgriSegmenter:
 
         try:
             import onnxruntime
-            providers = ["CUDAExecutionProvider", "CPUExecutionProvider"] if self._device == "gpu" else ["CPUExecutionProvider"]
+
+            providers = (
+                ["CUDAExecutionProvider", "CPUExecutionProvider"] if self._device == "gpu" else ["CPUExecutionProvider"]
+            )
             available = onnxruntime.get_available_providers()
             providers = [p for p in providers if p in available]
             self._session = InferenceSession(model_path, options, providers=providers)
@@ -86,6 +89,7 @@ class AgriSegmenter:
     def _load_model_yolo(self, model_path: str) -> None:
         try:
             from ultralytics import YOLO
+
             self._yolo_model = YOLO(model_path)
             logger.info("agri_segmenter_yolo_loaded", model_path=model_path)
         except Exception as exc:
@@ -148,13 +152,15 @@ class AgriSegmenter:
                     class_name = self._class_names[cls_id]
                 x1, y1, x2, y2 = (float(v) for v in box.xyxy[0])
                 bbox = [x1, y1, x2 - x1, y2 - y1]
-                instances.append(InstanceMaskResult(
-                    class_id=cls_id,
-                    class_name=class_name,
-                    confidence=conf,
-                    bbox=bbox,
-                    mask_rle="",
-                ))
+                instances.append(
+                    InstanceMaskResult(
+                        class_id=cls_id,
+                        class_name=class_name,
+                        confidence=conf,
+                        bbox=bbox,
+                        mask_rle="",
+                    )
+                )
         return instances
 
     def segment_batch(
@@ -172,12 +178,13 @@ class AgriSegmenter:
         nw, nh = int(img_w * scale), int(img_h * scale)
 
         import cv2
+
         resized = cv2.resize(image, (nw, nh), interpolation=cv2.INTER_LINEAR)
 
         canvas = np.full((input_h, input_w, 3), 114, dtype=np.uint8)
         dx = (input_w - nw) // 2
         dy = (input_h - nh) // 2
-        canvas[dy:dy + nh, dx:dx + nw] = resized
+        canvas[dy : dy + nh, dx : dx + nw] = resized
 
         canvas = canvas.astype(np.float32) / 255.0
         canvas = np.transpose(canvas, (2, 0, 1))
@@ -262,9 +269,9 @@ class AgriSegmenter:
                     mask_bin[:, :bx1] = 0
                     mask_bin[:, bx2:] = 0
 
-
                     try:
                         from pycocotools import mask as mask_utils
+
                         rle = mask_utils.encode(np.asfortranarray(mask_bin))
                         mask_rle = rle["counts"].decode("ascii") if isinstance(rle["counts"], bytes) else rle["counts"]
                     except ImportError:
@@ -273,6 +280,7 @@ class AgriSegmenter:
                     try:
                         from skimage import measure
                         from skimage.measure import approximate_polygon
+
                         contours = measure.find_contours(mask_bin, 0.5)
                         if contours:
                             largest = max(contours, key=len)
@@ -285,14 +293,16 @@ class AgriSegmenter:
 
             class_name = self._class_names[cid] if cid < len(self._class_names) else f"class_{cid}"
 
-            results.append(InstanceMaskResult(
-                class_id=cid,
-                class_name=class_name,
-                confidence=conf,
-                bbox=bbox,
-                mask_rle=mask_rle,
-                polygon=polygon,
-            ))
+            results.append(
+                InstanceMaskResult(
+                    class_id=cid,
+                    class_name=class_name,
+                    confidence=conf,
+                    bbox=bbox,
+                    mask_rle=mask_rle,
+                    polygon=polygon,
+                )
+            )
 
         return results
 
@@ -335,6 +345,148 @@ _crop_segmenter: AgriSegmenter | None = None
 _health_segmenter: AgriSegmenter | None = None
 
 
+def _classify_by_dominant_color(
+    roi: np.ndarray, class_names: list[str]
+) -> tuple[str, float]:
+    """Heuristic: map dominant HSV color in a detection ROI to an agri class."""
+    if roi is None or roi.size == 0:
+        return class_names[0] if class_names else "unknown", 0.3
+
+    hsv = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
+    h_mean = float(np.mean(hsv[:, :, 0]))
+    s_mean = float(np.mean(hsv[:, :, 1]))
+    v_mean = float(np.mean(hsv[:, :, 2]))
+
+    if s_mean < 30:
+        if v_mean > 180:
+            name = "cotton" if "cotton" in class_names else class_names[0]
+        elif v_mean < 60:
+            name = "bare_soil" if "bare_soil" in class_names else class_names[-1]
+        else:
+            name = class_names[0]
+        return name, 0.45
+
+    if 25 <= h_mean <= 45 and s_mean > 80:
+        if "maize" in class_names:
+            return "maize", 0.55
+        if "healthy" in class_names:
+            return "healthy", 0.6
+    elif 35 <= h_mean <= 85 and s_mean > 60:
+        if "vegetables" in class_names:
+            return "vegetables", 0.5
+        if "healthy" in class_names:
+            return "healthy", 0.55
+    elif h_mean < 15 or h_mean > 170:
+        if "drought_stressed" in class_names:
+            return "drought_stressed", 0.5
+        if "stressed" in class_names:
+            return "stressed", 0.45
+        if "tobacco" in class_names:
+            return "tobacco", 0.45
+    elif 10 <= h_mean < 25:
+        if "sweet_potato" in class_names:
+            return "sweet_potato", 0.45
+        if "stressed" in class_names:
+            return "stressed", 0.4
+
+    if v_mean < 80 and "diseased" in class_names:
+        return "diseased", 0.4
+    if v_mean > 200 and "healthy" in class_names:
+        return "healthy", 0.5
+
+    return class_names[0], 0.35
+
+
+class _YoloFallbackSegmenter:
+    """Wraps YOLOv8-seg to provide agri-like detections when no trained agri model exists.
+
+    Uses the general-purpose YOLO seg model and applies color heuristics to
+    map COCO classes to the requested agri taxonomy (crop type or health status).
+    """
+
+    def __init__(self, class_names: list[str]):
+        self._class_names = class_names
+        self._yolo = None
+
+    def is_loaded(self) -> bool:
+        return self._yolo is not None and self._yolo.is_loaded()
+
+    def _ensure_loaded(self) -> bool:
+        if self._yolo is not None:
+            return self._yolo.is_loaded()
+        try:
+            from app.ai.yolo_seg import get_yolo_seg_segmenter
+            self._yolo = get_yolo_seg_segmenter()
+            return self._yolo.is_loaded()
+        except Exception:
+            return False
+
+    def segment(
+        self,
+        image: np.ndarray,
+        conf_threshold: float = 0.25,
+        iou_threshold: float = 0.45,
+    ) -> list[InstanceMaskResult]:
+        if not self._ensure_loaded():
+            return []
+
+        import cv2
+
+        img_bytes = cv2.imencode(".jpg", image, [cv2.IMWRITE_JPEG_QUALITY, 90])[1].tobytes()
+        instances_raw = self._yolo.detect(img_bytes, conf_threshold=conf_threshold)
+
+        results = []
+        for inst in instances_raw:
+            coco_name = inst.get("class_name", "")
+            bbox_norm = inst.get("bbox", [0, 0, 0, 0])
+            h_img, w_img = image.shape[:2]
+            x1 = int(bbox_norm[0] * w_img)
+            y1 = int(bbox_norm[1] * h_img)
+            bw = int(bbox_norm[2] * w_img)
+            bh = int(bbox_norm[3] * h_img)
+            x2 = min(x1 + bw, w_img)
+            y2 = min(y1 + bh, h_img)
+
+            roi = image[max(0, y1):y2, max(0, x1):x2]
+
+            agri_name, agri_conf = _classify_by_dominant_color(roi, self._class_names)
+            final_conf = (inst.get("confidence", 0.3) * 0.4 + agri_conf * 0.6)
+            final_conf = min(max(final_conf, 0.15), 0.85)
+
+            mask = inst.get("mask")
+            polygon = None
+            if mask is not None and hasattr(mask, "shape"):
+                try:
+                    from app.ai.yolo_seg import mask_to_polygon
+                    polygon = mask_to_polygon(mask)
+                except Exception:
+                    pass
+
+            results.append(
+                InstanceMaskResult(
+                    class_id=self._class_names.index(agri_name) if agri_name in self._class_names else 0,
+                    class_name=agri_name,
+                    confidence=round(final_conf, 4),
+                    bbox=bbox_norm,
+                    mask_rle="",
+                    polygon=polygon,
+                )
+            )
+
+        return results
+
+
+def _build_yolo_fallback(class_names: list[str]) -> _YoloFallbackSegmenter:
+    """Create a YOLO-based fallback segmenter for agri tasks."""
+    fallback = _YoloFallbackSegmenter(class_names)
+    fallback._ensure_loaded()
+    if fallback.is_loaded():
+        logger.info("agri_yolo_fallback_loaded", classes=len(class_names))
+    else:
+        logger.warning("agri_yolo_fallback_unavailable")
+    return fallback
+
+
 async def get_agri_crop_segmenter(
     model_path: str | None = None,
     device: str = "cpu",
@@ -364,6 +516,8 @@ async def get_agri_crop_segmenter(
         _crop_segmenter = AgriSegmenter(model_path, device, class_names=CROP_TYPES)
     elif _crop_segmenter is None:
         _crop_segmenter = AgriSegmenter(class_names=CROP_TYPES)
+        if not _crop_segmenter.is_loaded():
+            _crop_segmenter = _build_yolo_fallback(CROP_TYPES)
     return _crop_segmenter
 
 
@@ -397,6 +551,8 @@ async def get_agri_health_segmenter(
         _health_segmenter = AgriSegmenter(model_path, device, class_names=HEALTH_STATUS_TYPES)
     elif _health_segmenter is None:
         _health_segmenter = AgriSegmenter(class_names=HEALTH_STATUS_TYPES)
+        if not _health_segmenter.is_loaded():
+            _health_segmenter = _build_yolo_fallback(HEALTH_STATUS_TYPES)
     return _health_segmenter
 
 

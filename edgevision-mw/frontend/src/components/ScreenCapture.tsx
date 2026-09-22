@@ -16,9 +16,28 @@ export default function ScreenCapture({ onCapture, capturedCount }: Props) {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
 
+  const stopScreenShare = useCallback(() => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+      mediaRecorderRef.current.stop();
+    }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+    }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+    setActive(false);
+    setRecording(false);
+  }, []);
+
   const startScreenShare = useCallback(async () => {
     // Ensure we're in a user gesture context for getDisplayMedia
     setError(null);
+    if (!navigator.mediaDevices?.getDisplayMedia) {
+      setError("Screen sharing requires HTTPS or localhost.");
+      return;
+    }
     try {
       const stream = await navigator.mediaDevices.getDisplayMedia({
         video: true,
@@ -40,22 +59,7 @@ export default function ScreenCapture({ onCapture, capturedCount }: Props) {
         : "Failed to start screen capture";
       setError(msg);
     }
-  }, []);
-
-  const stopScreenShare = useCallback(() => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
-      mediaRecorderRef.current.stop();
-    }
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((t) => t.stop());
-      streamRef.current = null;
-    }
-    if (videoRef.current) {
-      videoRef.current.srcObject = null;
-    }
-    setActive(false);
-    setRecording(false);
-  }, []);
+  }, [stopScreenShare]);
 
   useEffect(() => {
     if (!active || !streamRef.current) return;

@@ -1,4 +1,5 @@
 """Optional monocular depth estimation for 3D bounding boxes."""
+
 from __future__ import annotations
 
 import threading
@@ -20,15 +21,10 @@ def _find_model() -> Path | None:
     from app.core.config import settings
 
     candidates = []
-    depth_path = getattr(settings, "DEPTH_MODEL_PATH", None) or getattr(
-        settings, "DEPTH_ANYTHING_MODEL_PATH", None
-    )
+    depth_path = getattr(settings, "DEPTH_MODEL_PATH", None) or getattr(settings, "DEPTH_ANYTHING_MODEL_PATH", None)
     if depth_path:
         candidates.append(Path(depth_path))
-    candidates.append(
-        Path(__file__).resolve().parents[2]
-        / f"frontend/public/models/{_DEPTH_MODEL_FILENAME}"
-    )
+    candidates.append(Path(__file__).resolve().parents[2] / f"frontend/public/models/{_DEPTH_MODEL_FILENAME}")
     for p in candidates:
         if p.exists() and p.stat().st_size > 0:
             return p
@@ -53,9 +49,7 @@ class DepthEstimator:
         try:
             import onnxruntime as ort
 
-            providers = [
-                p for p in ("CPUExecutionProvider",) if p in ort.get_available_providers()
-            ]
+            providers = [p for p in ("CPUExecutionProvider",) if p in ort.get_available_providers()]
             self._session = ort.InferenceSession(str(self._model_path), providers=providers)
             self._input_name = self._session.get_inputs()[0].name
             logger.info("depth_estimator_loaded", model_path=str(self._model_path))
@@ -120,8 +114,15 @@ class DepthEstimator:
         bbox_xywh: list[float],
         *,
         lower_third_bias: float = 0.66,
+        mask: np.ndarray | None = None,
     ) -> tuple[float, str]:
-        """Median relative depth inside bbox with lower-third vertical bias."""
+        """Median relative depth inside bbox with lower-third vertical bias.
+
+        When a segmentation ``mask`` (H×W bool or uint8) is provided, depth is
+        sampled only from masked pixels — avoiding background/edge contamination
+        on irregular or overlapping objects.  Falls back to bbox-based sampling
+        when no mask is supplied or the mask contains fewer than 5 valid pixels.
+        """
         h, w = depth_map.shape[:2]
         x, y, bw, bh = bbox_xywh
         x1 = max(0, int(x * w))
@@ -131,6 +132,18 @@ class DepthEstimator:
         if x2 <= x1 or y2 <= y1:
             return 0.5, "fallback_center"
 
+        # --- Mask-based sampling (preferred) ---
+        if mask is not None and mask.shape[:2] == (h, w):
+            mask_region = mask[y1:y2, x1:x2]
+            if mask_region.size > 0:
+                bool_mask = mask_region.astype(bool) if mask_region.dtype != bool else mask_region
+                if bool_mask.sum() >= 5:
+                    depth_region = depth_map[y1:y2, x1:x2]
+                    masked_depths = depth_region[bool_mask]
+                    median = float(np.median(masked_depths))
+                    return median, "mask_median"
+
+        # --- Fallback: bbox lower-third bias ---
         region = depth_map[y1:y2, x1:x2]
         if region.size == 0:
             return 0.5, "fallback_center"
@@ -141,6 +154,33 @@ class DepthEstimator:
         median = float(np.median(biased if biased.size else region))
         quality = "biased_lower_third" if biased.size and bias_start > 0 else "full_bbox"
         return median, quality
+
+    @staticmethod
+    def verify_ordering(
+        depth_map: np.ndarray,
+        near_bbox: list[float],
+        far_bbox: list[float],
+        *,
+        mask_near: np.ndarray | None = None,
+        mask_far: np.ndarray | None = None,
+    ) -> dict:
+        """Phase 1.1 ordering check: verify closer objects have lower relative depth.
+
+        Returns a dict with ``consistent`` (bool), ``near_depth``, ``far_depth``,
+        and ``delta``.  Depth-Anything-V2 convention: higher value = farther, so
+        ``near_depth`` should be < ``far_depth`` for consistent ordering.
+        """
+        est = DepthEstimator(model_path="/nonexistent")
+        near_d, near_q = est.depth_at_bbox(depth_map, near_bbox, mask=mask_near)
+        far_d, far_q = est.depth_at_bbox(depth_map, far_bbox, mask=mask_far)
+        return {
+            "consistent": near_d < far_d,
+            "near_depth": near_d,
+            "near_quality": near_q,
+            "far_depth": far_d,
+            "far_quality": far_q,
+            "delta": far_d - near_d,
+        }
 
 
 _estimator: DepthEstimator | None = None

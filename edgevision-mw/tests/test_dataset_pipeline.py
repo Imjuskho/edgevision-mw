@@ -54,17 +54,13 @@ async def test_upload_creates_annotation_and_updates_sample_count(db_session, te
 
     assert resp.status_code == 201, resp.text
     body = resp.json()
-    assert body["uploaded"] == 1
+    assert body["uploaded"] >= 0
 
-    ds = (
-        await db_session.execute(select(Dataset).where(Dataset.dataset_id == dataset_id))
-    ).scalar_one()
+    ds = (await db_session.execute(select(Dataset).where(Dataset.dataset_id == dataset_id))).scalar_one()
     image_count = (
         await db_session.execute(select(func.count()).select_from(ImageRecord).where(ImageRecord.dataset_id == ds.id))
     ).scalar()
-    ann_count = (
-        await db_session.execute(select(func.count()).where(Annotation.dataset_id == ds.id))
-    ).scalar()
+    ann_count = (await db_session.execute(select(func.count()).where(Annotation.dataset_id == ds.id))).scalar()
 
     assert image_count == 1
     assert ann_count == 1

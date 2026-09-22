@@ -8,7 +8,7 @@ from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.annotation import Annotation
-from app.models.dataset import Dataset
+from app.models.dataset import Dataset, DatasetSubjectMembership
 from app.models.enums import AnnotationStatus, DatasetStatus, LicenseType
 from app.schemas.catalog import (
     DatasetManifest,
@@ -18,9 +18,11 @@ from app.schemas.catalog import (
 from app.schemas.common import PaginatedResponse
 
 EXCLUSIVITY_MULTIPLIERS = {
+    "ONE_TIME": Decimal("0.5"),
     "ANNUAL": Decimal("1.0"),
     "PERPETUAL": Decimal("1.5"),
     "EXCLUSIVE": Decimal("2.5"),
+    "COMMISSIONED": Decimal("3.0"),
 }
 GEOGRAPHY_PREMIUMS = {
     "MW": Decimal("1.0"),
@@ -121,6 +123,7 @@ async def trigger_build(db: AsyncSession, build_request: dict) -> DatasetRespons
     import json
 
     from app.workers.tasks import build_dataset_task
+
     build_dataset_task.delay(
         dataset_id=str(dataset.id),
         build_request_json=json.dumps(build_request),
@@ -131,7 +134,7 @@ async def trigger_build(db: AsyncSession, build_request: dict) -> DatasetRespons
         dataset_id=dataset.dataset_id,
         name=dataset.name,
         version=dataset.version,
-        status=dataset.status.value if hasattr(dataset.status, 'value') else dataset.status,
+        status=dataset.status.value if hasattr(dataset.status, "value") else dataset.status,
         sample_count=0,
         classes={},
         annotations_per_image=0.0,
@@ -144,7 +147,7 @@ async def trigger_build(db: AsyncSession, build_request: dict) -> DatasetRespons
         iaa_score=0.0,
         formats=dataset.formats,
         price_usd=Decimal("0.00"),
-        license_type=dataset.license_type.value if hasattr(dataset.license_type, 'value') else dataset.license_type,
+        license_type=dataset.license_type.value if hasattr(dataset.license_type, "value") else dataset.license_type,
         created_at=dataset.created_at,
     )
 
@@ -204,6 +207,7 @@ async def build_dataset_sync(db: AsyncSession, dataset_id: str, build_request: d
 
     # Run PII check
     from app.services.compliance import run_pii_check
+
     pii_result = await run_pii_check(db, dataset.dataset_id)
 
     # Update dataset
@@ -212,15 +216,56 @@ async def build_dataset_sync(db: AsyncSession, dataset_id: str, build_request: d
     dataset.iaa_score = round(avg_iaa, 4)
     dataset.consent_coverage_pct = 100.0
     dataset.pii_scrub_verified = pii_result.passed
+
+    if pii_result.passed is False:
+        dataset.status = DatasetStatus.RETRACTED
+        await db.commit()
+        return False
+
     dataset.status = DatasetStatus.READY
 
     # Calculate price
-    price = calculate_price({
-        "sample_count": len(deduped),
-        "license_type": dataset.license_type.value if hasattr(dataset.license_type, 'value') else dataset.license_type,
-        "complexity": 1.0,
-    })
+    price = calculate_price(
+        {
+            "sample_count": len(deduped),
+            "license_type": dataset.license_type.value
+            if hasattr(dataset.license_type, "value")
+            else dataset.license_type,
+            "complexity": 1.0,
+        }
+    )
     dataset.price_usd = price
+
+    # G1: Populate dataset-subject membership table
+    from app.models.subject import SubjectAnnotation
+
+    deduped_ann_ids = [a.id for a in deduped]
+    if deduped_ann_ids:
+        sa_result = await db.execute(
+            select(
+                SubjectAnnotation.subject_hash,
+                func.min(SubjectAnnotation.annotation_id).label("first_annotation_id"),
+                func.count(SubjectAnnotation.id).label("cnt"),
+            )
+            .where(SubjectAnnotation.annotation_id.in_(deduped_ann_ids))
+            .group_by(SubjectAnnotation.subject_hash)
+        )
+        subject_rows = sa_result.all()
+
+        for row in subject_rows:
+            # Resolve the batch_id from the first annotation linked to this subject
+            ann_result = await db.execute(
+                select(Annotation.batch_id).where(Annotation.id == row.first_annotation_id)
+            )
+            first_batch_id = ann_result.scalar_one_or_none()
+
+            membership = DatasetSubjectMembership(
+                dataset_id=dataset.dataset_id,
+                subject_hash=row.subject_hash,
+                first_seen_batch_id=first_batch_id,
+                annotation_count=row.cnt,
+            )
+            db.add(membership)
 
     await db.commit()
     return True
@@ -229,21 +274,15 @@ async def build_dataset_sync(db: AsyncSession, dataset_id: str, build_request: d
 async def get_manifest(db: AsyncSession, dataset_id: str) -> DatasetManifest | None:
     from app.models.annotation import Annotation
 
-    result = await db.execute(
-        select(Dataset).where(Dataset.dataset_id == dataset_id)
-    )
+    result = await db.execute(select(Dataset).where(Dataset.dataset_id == dataset_id))
     dataset = result.scalar_one_or_none()
     if dataset is None:
         return None
 
     class_names = list(dataset.classes.keys())
-    category_ids: dict[str, int] = {
-        name: idx + 1 for idx, name in enumerate(class_names)
-    }
+    category_ids: dict[str, int] = {name: idx + 1 for idx, name in enumerate(class_names)}
 
-    ann_result = await db.execute(
-        select(Annotation).where(Annotation.dataset_id == dataset.id)
-    )
+    ann_result = await db.execute(select(Annotation).where(Annotation.dataset_id == dataset.id))
     annotations = ann_result.scalars().all()
 
     images: list[dict] = []
@@ -299,24 +338,19 @@ async def get_manifest(db: AsyncSession, dataset_id: str) -> DatasetManifest | N
         },
         images=images,
         annotations=manifest_annotations,
-        categories=[
-            {"id": category_ids[name], "name": name, "supercategory": "object"}
-            for name in class_names
-        ],
+        categories=[{"id": category_ids[name], "name": name, "supercategory": "object"} for name in class_names],
     )
 
 
 async def generate_quote(db: AsyncSession, quote_request: dict) -> QuoteResponse:
     from app.models.quote import Quote
 
-    result = await db.execute(
-        select(Dataset).where(Dataset.dataset_id == quote_request["dataset_id"])
-    )
+    result = await db.execute(select(Dataset).where(Dataset.dataset_id == quote_request["dataset_id"]))
     dataset = result.scalar_one_or_none()
     if dataset is None:
         raise ValueError("Dataset not found")
 
-    ds_status = dataset.status.value if hasattr(dataset.status, 'value') else dataset.status
+    ds_status = dataset.status.value if hasattr(dataset.status, "value") else dataset.status
     if ds_status != "FOR_SALE":
         raise ValueError(f"Dataset status is {ds_status}, expected FOR_SALE")
 
@@ -374,22 +408,19 @@ def calculate_price(spec: dict) -> Decimal:
     return total.quantize(Decimal("0.01"))
 
 
-async def publish_dataset(
-    db: AsyncSession, dataset_id: str
-) -> DatasetResponse:
+async def publish_dataset(db: AsyncSession, dataset_id: str) -> DatasetResponse:
     """Transition a READY dataset to FOR_SALE (H4)."""
-    result = await db.execute(
-        select(Dataset).where(Dataset.dataset_id == dataset_id).with_for_update()
-    )
+    result = await db.execute(select(Dataset).where(Dataset.dataset_id == dataset_id).with_for_update())
     dataset = result.scalar_one_or_none()
     if dataset is None:
         raise ValueError(f"Dataset {dataset_id} not found")
 
     current = dataset.status.value if hasattr(dataset.status, "value") else dataset.status
     if current != DatasetStatus.READY.value:
-        raise ValueError(
-            f"Cannot publish dataset in {current} status; expected {DatasetStatus.READY.value}"
-        )
+        raise ValueError(f"Cannot publish dataset in {current} status; expected {DatasetStatus.READY.value}")
+
+    if dataset.pii_scrub_verified is False:
+        raise ValueError("PII verification is required before publishing")
 
     dataset.status = DatasetStatus.FOR_SALE
     await db.commit()

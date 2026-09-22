@@ -2,6 +2,7 @@
 
 Generates CLIP ViT-B/32 image embeddings for semantic deduplication.
 """
+
 from __future__ import annotations
 
 import logging
@@ -30,10 +31,7 @@ def _find_clip_model() -> Path | None:
     candidates = []
     if settings.CLIP_VIT_B32_PATH:
         candidates.append(Path(settings.CLIP_VIT_B32_PATH))
-    candidates.append(
-        Path(__file__).resolve().parents[2]
-        / "frontend/public/models/clip_vit_b32.onnx"
-    )
+    candidates.append(Path(__file__).resolve().parents[2] / "frontend/public/models/clip_vit_b32.onnx")
     for p in candidates:
         if p.exists():
             return p

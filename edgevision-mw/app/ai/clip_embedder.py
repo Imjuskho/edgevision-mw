@@ -34,6 +34,7 @@ class CLIPEmbedder:
     def _load(self) -> None:
         try:
             import onnxruntime as ort
+
             self._session = ort.InferenceSession(
                 str(self._model_path),
                 providers=["CPUExecutionProvider"],

@@ -14,11 +14,15 @@ export default function ImageSidebar({ datasetId, currentIndex, onSelect }: Prop
   const [images, setImages] = useState<ImageItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [prevDatasetId, setPrevDatasetId] = useState(datasetId);
+  if (datasetId !== prevDatasetId) {
+    setPrevDatasetId(datasetId);
+    setLoading(true);
+    setError(false);
+  }
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
-    setError(false);
     studioApi
       .listImages(datasetId, 1, 200)
       .then((resp) => {

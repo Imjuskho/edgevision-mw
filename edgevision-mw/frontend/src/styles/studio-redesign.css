@@ -416,14 +416,14 @@
 
 .btn-primary {
   background: var(--accent-blue);
-  color: #fff;
+  color: var(--text-on-accent);
   border-color: var(--accent-blue);
 }
 .btn-primary:hover { filter: brightness(1.15); }
 
 .btn-success {
   background: var(--accent-green);
-  color: #fff;
+  color: var(--text-on-accent);
   border-color: var(--accent-green);
 }
 .btn-success:hover { filter: brightness(1.15); }
@@ -633,20 +633,39 @@ tr:hover td { background: var(--bg-elevated); }
 }
 
 /* ── Live Annotate Page ──────────────────────────────── */
-.live-annotate-page .live-annotate-body {
+.page-shell.live-annotate-page {
   display: flex;
   flex-direction: column;
+  height: calc(100vh - var(--topbar-h, 56px));
+  min-height: 0;
+  max-height: calc(100vh - var(--topbar-h, 56px));
+  overflow: hidden;
+  padding: 16px 0;
+}
+
+.page-shell.live-annotate-page .live-annotate-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
   width: 100%;
   max-width: 1200px;
   margin: 0 auto;
+  overflow: hidden;
 }
 
-.live-annotate-page .annotate-layout {
-  width: 100%;
-}
-
-.live-annotate-page .page-heading {
+.page-shell.live-annotate-page .page-heading {
+  flex-shrink: 0;
   border-left-color: var(--section-live);
+  margin-bottom: 12px;
+  padding: 0 16px;
+}
+
+.page-shell.live-annotate-page .annotate-layout {
+  width: 100%;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .live-annotate-video-container {
@@ -662,26 +681,94 @@ tr:hover td { background: var(--bg-elevated); }
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
 }
 
+.live-annotate-setup {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: 20px;
+  width: 100%;
+}
+
+.live-annotate-setup-main {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.live-annotate-setup-sidebar {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  max-height: calc(100vh - 200px);
+  overflow-y: auto;
+}
+
+.live-annotate-setup-sidebar .live-annotate-inspector {
+  gap: 16px;
+}
+
+.live-annotate-setup-heading {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0 0 8px 0;
+  color: var(--text-primary);
+}
+
 .live-annotate-picker {
   display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  align-items: center;
-  justify-content: center;
-  min-height: 280px;
-  padding: 32px;
+  flex-direction: column;
+  gap: 16px;
+  align-items: flex-start;
+  padding: 28px 32px;
   background: var(--bg-surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
 }
 
+.live-annotate-picker-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.live-annotate-connection-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  color: var(--text-secondary);
+}
+
+.live-annotate-dataset-badge {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.live-annotate-setup-info {
+  padding: 16px 20px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.live-annotate-pending-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
 .live-annotate-video-wrapper {
   position: relative;
   width: 100%;
-  min-height: 360px;
-  background: #000;
+  flex: 1;
+  min-height: 0;
+  background: var(--bg-root);
   border-radius: var(--radius);
   overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 /*
@@ -700,11 +787,10 @@ tr:hover td { background: var(--bg-elevated); }
 
 .live-annotate-video {
   width: 100%;
-  height: auto;
+  height: 100%;
   display: block;
   object-fit: contain;
-  min-height: 360px;
-  background: #000;
+  background: var(--bg-root);
 }
 
 .live-annotate-loading {
@@ -713,7 +799,7 @@ tr:hover td { background: var(--bg-elevated); }
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #fff;
+  color: var(--text-on-accent);
   font-weight: 600;
   background: rgba(0, 0, 0, 0.45);
   text-align: center;
@@ -924,7 +1010,7 @@ tr:hover td { background: var(--bg-elevated); }
 .road-analysis-big-number { font-size: 32px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .road-analysis-badge {
   display: inline-block; padding: 2px 12px; border-radius: 10px; font-size: 11px; font-weight: 600;
-  color: #fff; margin-top: 6px;
+  color: var(--text-on-accent); margin-top: 6px;
 }
 .road-analysis-sub { font-size: 12px; color: var(--text-secondary); margin-top: 4px; }
 .road-analysis-section { margin-bottom: 24px; }
@@ -1071,7 +1157,7 @@ tr:hover td { background: var(--bg-elevated); }
 
 .upload-page .upload-tab.active {
   background: var(--accent);
-  color: #fff;
+  color: var(--text-on-accent);
 }
 
 .upload-page .upload-tab:hover:not(.active) {
@@ -1099,7 +1185,7 @@ tr:hover td { background: var(--bg-elevated); }
   width: 100%;
   max-height: 480px;
   border-radius: var(--radius);
-  background: #000;
+  background: var(--bg-root);
   object-fit: contain;
 }
 
@@ -1586,7 +1672,7 @@ tr:hover td { background: var(--bg-elevated); }
   letter-spacing: 0.04em;
 }
 .type-badge {
-  color: #fff;
+  color: var(--text-on-accent);
 }
 .badge-sync { background: rgba(34,197,94,0.16); color: #88ffb8; }
 .badge-photo { background: rgba(59,130,246,0.16); color: #a5d8ff; }
@@ -1921,7 +2007,7 @@ tr:hover td { background: var(--bg-elevated); }
 .fleet-node-meta { display: flex; gap: 12px; font-size: 11px; color: var(--text-tertiary); padding-left: 24px; }
 .fleet-detail-header { display: flex; align-items: center; gap: 12px; }
 .fleet-detail-header h3 { margin: 0; text-transform: none; letter-spacing: 0; color: var(--text-primary); }
-.fleet-node-status-badge { padding: 2px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; color: #fff; }
+.fleet-node-status-badge { padding: 2px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; color: var(--text-on-accent); }
 .fleet-detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .detail-field { display: flex; flex-direction: column; gap: 1px; padding: 6px 0; }
 .detail-field label { font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: var(--text-tertiary); }
@@ -1959,7 +2045,7 @@ tr:hover td { background: var(--bg-elevated); }
 .agri-analysis-card { background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 8px; padding: 20px; border-top: 3px solid var(--border); }
 .agri-analysis-card h3 { margin: 0 0 12px; font-size: 12px; text-transform: uppercase; letter-spacing: .5px; color: var(--text-tertiary); }
 .agri-analysis-big-number { font-size: 32px; font-weight: 700; line-height: 1; margin-bottom: 8px; }
-.agri-analysis-badge { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; color: #fff; }
+.agri-analysis-badge { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; color: var(--text-on-accent); }
 .agri-analysis-sub { font-size: 12px; color: var(--text-tertiary); margin-top: 4px; }
 .agri-analysis-section { background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 8px; padding: 20px; }
 .agri-analysis-section h3 { margin: 0 0 16px; font-size: 14px; }
@@ -2189,7 +2275,8 @@ tr:hover td { background: var(--bg-elevated); }
 }
 
 .annotate-workspace-body--live {
-  min-height: 360px;
+  flex: 1;
+  min-height: 0;
 }
 
 .annotate-canvas-wrap--live {
@@ -2197,13 +2284,16 @@ tr:hover td { background: var(--bg-elevated); }
   align-items: center;
   justify-content: center;
   background: #000;
-  min-height: 360px;
+  flex: 1;
+  min-height: 0;
   padding: 0;
 }
 
 .annotate-toolbar-nav--live {
   flex-wrap: wrap;
   gap: 8px;
+  min-height: 32px;
+  align-items: center;
 }
 
 .live-annotate-inspector {
@@ -2218,6 +2308,142 @@ tr:hover td { background: var(--bg-elevated); }
   gap: 6px;
   padding-top: 8px;
   border-top: 1px solid var(--border);
+}
+
+.live-annotate-inspector-events {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.live-annotate-event-feed {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.live-annotate-event-feed-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.live-annotate-inspector-detections {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.live-annotate-detection-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.live-annotate-detection-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 12px;
+  transition: background 0.1s;
+}
+
+.live-annotate-detection-item:hover {
+  background: var(--bg-hover, rgba(255, 255, 255, 0.06));
+}
+
+.live-annotate-detection-item--selected {
+  background: var(--bg-active, rgba(0, 194, 255, 0.12));
+  outline: 1px solid var(--accent-blue);
+}
+
+.live-annotate-relabel {
+  padding-top: 4px;
+}
+
+@keyframes live-annotate-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.live-annotate-pulse {
+  animation: live-annotate-pulse 1.5s ease-in-out infinite;
+}
+
+.live-annotate-toolbar-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  flex-shrink: 0;
+  width: 100%;
+}
+
+.live-annotate-toolbar-inline-controls {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.live-annotate-toolbar-control {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.live-annotate-toolbar-control .text-caption {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted, #94a3b8);
+  white-space: nowrap;
+}
+
+.live-annotate-toolbar-control select {
+  min-width: 0;
+  max-width: 140px;
+  padding: 3px 6px;
+  font-size: 12px;
+  border-radius: var(--radius-sm, 4px);
+  border: 1px solid var(--border, #334155);
+  background: var(--surface, #1e293b);
+  color: inherit;
+}
+
+.live-annotate-toolbar-control--active {
+  color: var(--accent-blue, #3b82f6);
+}
+
+.live-annotate-toolbar-badges {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-left: auto;
+}
+
+.live-annotate-depth-badge {
+  margin-left: 4px;
 }
 
 .annotate-workspace-title {
@@ -2237,8 +2463,33 @@ tr:hover td { background: var(--bg-elevated); }
   overflow: hidden;
 }
 
+.annotate-workspace-body--live {
+  overflow: hidden;
+}
+
+.annotate-workspace-body--live .annotate-inspector {
+  min-height: 0;
+  overflow-y: auto;
+}
+
 .annotate-inspector .road-seg-panel {
   height: 100%;
+}
+
+.content-area__inner:has(.live-annotate-page .annotate-layout) {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: none;
+  min-height: 0;
+  height: 100%;
+}
+
+.content-area:has(.live-annotate-page .annotate-layout) {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0;
 }
 
 .content-area__inner:has(.annotate-layout) {
@@ -2403,4 +2654,133 @@ tr:hover td { background: var(--bg-elevated); }
 
 .home-browse-cta {
   margin-top: 8px;
+}
+
+/* ── Responsive: Annotate workspace & Live Annotate ─────
+ * Desktop: the inspector is always expanded (summary hidden).
+ * ≤960px: the inspector collapses into a tap-to-open section so the
+ * canvas/video keeps the vertical space; touch targets are enlarged. */
+
+@media (min-width: 961px) {
+  .annotate-inspector-summary {
+    display: none;
+  }
+
+  .annotate-inspector-details:not([open]) .annotate-inspector-content {
+    display: block;
+  }
+}
+
+@media (max-width: 960px) {
+  .annotate-inspector-details {
+    border-top: 1px solid var(--border);
+  }
+
+  .annotate-inspector-summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding: 10px 4px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    background: transparent;
+    border: none;
+    list-style: none;
+  }
+
+  .annotate-inspector-summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .annotate-inspector-summary svg {
+    transition: transform var(--dur-fast, 120ms) var(--ease-out, ease-out);
+  }
+
+  .annotate-inspector-details[open] .annotate-inspector-summary svg {
+    transform: rotate(180deg);
+  }
+
+  .annotate-inspector-content {
+    padding: 8px 4px 12px;
+  }
+
+  .annotate-inspector {
+    max-height: none;
+  }
+
+  .annotate-workspace-body--live,
+  .annotate-canvas-wrap--live,
+  .live-annotate-video-wrapper,
+  .live-annotate-video {
+    min-height: 0;
+  }
+
+  .live-annotate-video {
+    max-height: 48vh;
+  }
+
+  .annotate-toolbar {
+    padding: 8px;
+  }
+
+  .annotate-toolbar .ui-btn {
+    min-height: 40px;
+  }
+
+  .ui-kbd {
+    display: none;
+  }
+
+  .live-annotate-toolbar-inline-controls {
+    gap: 8px;
+  }
+
+  .live-annotate-toolbar-control select {
+    max-width: 120px;
+  }
+}
+
+@media (max-width: 640px) {
+  .page-shell.live-annotate-page .page-heading p {
+    display: none;
+  }
+
+  .live-annotate-picker {
+    padding: 20px 16px;
+  }
+
+  .live-annotate-picker .ui-btn {
+    width: 100%;
+    min-height: 46px;
+    font-size: 15px;
+  }
+
+  .annotate-toolbar-actions {
+    gap: 6px;
+  }
+
+  .live-annotate-setup {
+    grid-template-columns: 1fr;
+  }
+
+  .live-annotate-setup-sidebar {
+    max-height: none;
+  }
+
+  .live-annotate-toolbar-inline-controls {
+    gap: 6px;
+  }
+
+  .live-annotate-toolbar-control .text-caption {
+    display: none;
+  }
+
+  .live-annotate-toolbar-control select {
+    max-width: 110px;
+    font-size: 11px;
+    padding: 2px 4px;
+  }
 }

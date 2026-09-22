@@ -19,6 +19,7 @@ def _set_task_correlation(correlation_id: str | None = None) -> None:
     cid = correlation_id or str(uuid4().hex[:12])
     request_id_var.set(cid)
 
+
 _worker_loops: dict[int, asyncio.AbstractEventLoop] = {}
 _worker_loops_lock = threading.Lock()
 
@@ -81,9 +82,7 @@ async def _mark_training_failed_async(job_id: str, error: str | None = None) -> 
     from app.models.training import TrainingJob
 
     async with async_session() as db:
-        result = await db.execute(
-            select(TrainingJob).where(TrainingJob.id == UUID(job_id)).with_for_update()
-        )
+        result = await db.execute(select(TrainingJob).where(TrainingJob.id == UUID(job_id)).with_for_update())
         job = result.scalar_one_or_none()
         if job is None:
             return
@@ -143,6 +142,14 @@ async def _write_audit_log(
     from app.core.database import async_session
     from app.models.audit import AuditLog
 
+    resolved_rid = None
+    if resource_id is not None:
+        try:
+            from uuid import UUID as _UUID
+            resolved_rid = _UUID(str(resource_id))
+        except (ValueError, TypeError):
+            resolved_rid = None
+
     async with async_session() as db:
         db.add(
             AuditLog(
@@ -150,7 +157,7 @@ async def _write_audit_log(
                 event_type=event_type,
                 severity=severity,
                 resource_type=resource_type,
-                resource_id=resource_id,
+                resource_id=resolved_rid,
                 details=details,
                 actor_type=actor_type,
             )
@@ -161,6 +168,7 @@ async def _write_audit_log(
 # ---------------------------------------------------------------------------
 # Batch processing
 # ---------------------------------------------------------------------------
+
 
 async def _process_batch_async(batch_id: str) -> None:
     from app.core.database import async_session
@@ -185,9 +193,11 @@ def process_batch_task(batch_id: str) -> bool:
         logger.info("Batch %s processed successfully", batch_id)
         _run_async(
             _write_audit_log(
-                "BATCH_PROCESSED", "INFO",
+                "BATCH_PROCESSED",
+                "INFO",
                 {"batch_id": batch_id, "status": "success"},
-                resource_type="ingestion_batch", resource_id=batch_id,
+                resource_type="ingestion_batch",
+                resource_id=batch_id,
             )
         )
         return True
@@ -195,9 +205,11 @@ def process_batch_task(batch_id: str) -> bool:
         logger.error("Failed to process batch %s: %s", batch_id, exc)
         _run_async(
             _write_audit_log(
-                "BATCH_PROCESS_FAILED", "ERROR",
+                "BATCH_PROCESS_FAILED",
+                "ERROR",
                 {"batch_id": batch_id, "error": str(exc), "traceback": traceback.format_exc()},
-                resource_type="ingestion_batch", resource_id=batch_id,
+                resource_type="ingestion_batch",
+                resource_id=batch_id,
             )
         )
         raise
@@ -206,6 +218,7 @@ def process_batch_task(batch_id: str) -> bool:
 # ---------------------------------------------------------------------------
 # Dataset build
 # ---------------------------------------------------------------------------
+
 
 async def _build_dataset_async(dataset_id: str, build_request_json: str) -> None:
     from app.core.database import async_session
@@ -230,9 +243,11 @@ def build_dataset_task(dataset_id: str, build_request_json: str = "{}") -> bool:
         logger.info("Dataset %s build completed", dataset_id)
         _run_async(
             _write_audit_log(
-                "DATASET_BUILD_COMPLETED", "INFO",
+                "DATASET_BUILD_COMPLETED",
+                "INFO",
                 {"dataset_id": dataset_id, "status": "success"},
-                resource_type="dataset", resource_id=dataset_id,
+                resource_type="dataset",
+                resource_id=dataset_id,
             )
         )
         return True
@@ -240,9 +255,11 @@ def build_dataset_task(dataset_id: str, build_request_json: str = "{}") -> bool:
         logger.error("Failed to build dataset %s: %s", dataset_id, exc)
         _run_async(
             _write_audit_log(
-                "DATASET_BUILD_FAILED", "ERROR",
+                "DATASET_BUILD_FAILED",
+                "ERROR",
                 {"dataset_id": dataset_id, "error": str(exc), "traceback": traceback.format_exc()},
-                resource_type="dataset", resource_id=dataset_id,
+                resource_type="dataset",
+                resource_id=dataset_id,
             )
         )
         raise
@@ -251,6 +268,7 @@ def build_dataset_task(dataset_id: str, build_request_json: str = "{}") -> bool:
 # ---------------------------------------------------------------------------
 # Compliance audit
 # ---------------------------------------------------------------------------
+
 
 async def _run_audit_async() -> None:
     from app.core.database import async_session
@@ -281,7 +299,8 @@ def run_compliance_audit_task() -> bool:
         logger.info("Compliance audit completed")
         _run_async(
             _write_audit_log(
-                "COMPLIANCE_AUDIT_COMPLETED", "INFO",
+                "COMPLIANCE_AUDIT_COMPLETED",
+                "INFO",
                 {"status": "success"},
                 resource_type="compliance",
             )
@@ -291,7 +310,8 @@ def run_compliance_audit_task() -> bool:
         logger.error("Failed to run compliance audit: %s", exc)
         _run_async(
             _write_audit_log(
-                "COMPLIANCE_AUDIT_FAILED", "ERROR",
+                "COMPLIANCE_AUDIT_FAILED",
+                "ERROR",
                 {"error": str(exc), "traceback": traceback.format_exc()},
                 resource_type="compliance",
             )
@@ -302,6 +322,7 @@ def run_compliance_audit_task() -> bool:
 # ---------------------------------------------------------------------------
 # Auto-labeling (SAM/YOLO stub with real status transitions)
 # ---------------------------------------------------------------------------
+
 
 async def _auto_label_async(batch_id: str) -> dict:
     """Auto-label every image in a batch with real server-side inference.
@@ -328,9 +349,7 @@ async def _auto_label_async(batch_id: str) -> dict:
     from app.models.ingestion import IngestionBatch
 
     async with async_session() as db:
-        result = await db.execute(
-            select(IngestionBatch).where(IngestionBatch.batch_id == batch_id).with_for_update()
-        )
+        result = await db.execute(select(IngestionBatch).where(IngestionBatch.batch_id == batch_id).with_for_update())
         batch = result.scalar_one_or_none()
         if batch is None:
             raise ValueError(f"Batch {batch_id} not found")
@@ -348,6 +367,7 @@ async def _auto_label_async(batch_id: str) -> dict:
         prelabeled = 0
         segmented = 0
         face_blurred = 0
+        plate_blurred = 0
 
         for idx in range(batch.event_count):
             img_path = f"raw/{batch.node_id}/{batch_id}/{idx}.jpg"
@@ -375,9 +395,7 @@ async def _auto_label_async(batch_id: str) -> dict:
                     import cv2
                     import numpy as np
 
-                    arr = cv2.imdecode(
-                        np.frombuffer(img_bytes, dtype=np.uint8), cv2.IMREAD_COLOR
-                    )
+                    arr = cv2.imdecode(np.frombuffer(img_bytes, dtype=np.uint8), cv2.IMREAD_COLOR)
                     if arr is None:
                         raise ValueError("undecodable image")
 
@@ -401,28 +419,36 @@ async def _auto_label_async(batch_id: str) -> dict:
                             detections = assign_masks(detections, instances)
                             if not detections:
                                 for inst in instances:
-                                    detections.append({
-                                        "label": inst.get("taxonomy", inst.get("class_name", "object")),
-                                        "class_name": inst.get("class_name", "object"),
-                                        "confidence": inst.get("confidence", 0.0),
-                                        "bbox": inst.get("bbox", []),
-                                        "mask": inst.get("mask"),
-                                    })
+                                    detections.append(
+                                        {
+                                            "label": inst.get("taxonomy", inst.get("class_name", "object")),
+                                            "class_name": inst.get("class_name", "object"),
+                                            "confidence": inst.get("confidence", 0.0),
+                                            "bbox": inst.get("bbox", []),
+                                            "mask": inst.get("mask"),
+                                        }
+                                    )
 
                     if yolo_loaded and not instances:
                         instances = yolo.detect(img_bytes)
                         detections = assign_masks(detections, instances)
                         if not detections and instances:
                             for inst in instances:
-                                detections.append({
-                                    "label": inst["taxonomy"],
-                                    "class_name": inst["class_name"],
-                                    "confidence": inst["confidence"],
-                                    "bbox": inst["bbox"],
-                                    "mask": inst["mask"],
-                                })
+                                detections.append(
+                                    {
+                                        "label": inst["taxonomy"],
+                                        "class_name": inst["class_name"],
+                                        "confidence": inst["confidence"],
+                                        "bbox": inst["bbox"],
+                                        "mask": inst["mask"],
+                                    }
+                                )
 
                     h, w = arr.shape[:2]
+                    detected_objects["image_width"] = w
+                    detected_objects["image_height"] = h
+                    auto_labels["image_width"] = w
+                    auto_labels["image_height"] = h
                     objects: list[dict] = []
                     for det in detections:
                         bbox = det.get("bbox")
@@ -466,27 +492,30 @@ async def _auto_label_async(batch_id: str) -> dict:
                 auto_labels=auto_labels,
                 status=AnnotationStatus.PENDING,
                 quality_score=0.0,
+                model_version="yolov8-seg-1.0",
             )
             db.add(annotation)
             annotations_created += 1
 
             if mc is not None and img_bytes and len(img_bytes) >= 100:
                 try:
-                    from app.ai.face_privacy import get_face_blurrer
+                    from app.ai.pii_redaction import redact_image_bytes
 
-                    blurrer = get_face_blurrer()
-                    if blurrer.is_loaded():
+                    redaction = redact_image_bytes(img_bytes)
+                    if redaction.redacted:
                         import io as _io
 
-                        blurred = blurrer.process_image_bytes(img_bytes)
                         mc.put_object(
                             settings.MINIO_BUCKET,
                             img_path,
-                            _io.BytesIO(blurred),
-                            len(blurred),
+                            _io.BytesIO(redaction.image_bytes),
+                            len(redaction.image_bytes),
                             content_type="image/jpeg",
                         )
-                        face_blurred += 1
+                        if redaction.faces_blurred:
+                            face_blurred += 1
+                        if redaction.plates_blurred:
+                            plate_blurred += 1
                 except Exception:
                     continue
 
@@ -499,6 +528,7 @@ async def _auto_label_async(batch_id: str) -> dict:
             "prelabeled": prelabeled,
             "segmented": segmented,
             "face_blurred": face_blurred,
+            "plate_blurred": plate_blurred,
             "final_status": batch.status,
         }
 
@@ -517,9 +547,11 @@ def auto_label_task(batch_id: str) -> bool:
         logger.info("Auto-labeling completed for batch %s", batch_id)
         _run_async(
             _write_audit_log(
-                "AUTO_LABEL_COMPLETED", "INFO",
+                "AUTO_LABEL_COMPLETED",
+                "INFO",
                 {"batch_id": batch_id, "status": "success", **summary},
-                resource_type="ingestion_batch", resource_id=batch_id,
+                resource_type="ingestion_batch",
+                resource_id=batch_id,
             )
         )
         return True
@@ -527,9 +559,11 @@ def auto_label_task(batch_id: str) -> bool:
         logger.error("Failed to auto-label batch %s: %s", batch_id, exc)
         _run_async(
             _write_audit_log(
-                "AUTO_LABEL_FAILED", "ERROR",
+                "AUTO_LABEL_FAILED",
+                "ERROR",
                 {"batch_id": batch_id, "error": str(exc)},
-                resource_type="ingestion_batch", resource_id=batch_id,
+                resource_type="ingestion_batch",
+                resource_id=batch_id,
             )
         )
         raise
@@ -579,15 +613,14 @@ async def _auto_label_annotations_async(
                         continue
 
                     try:
-                        detections = prelabel_image(
-                            data, confidence_threshold=confidence_threshold
-                        )
+                        detections = prelabel_image(data, confidence_threshold=confidence_threshold)
                     except Exception:
                         detections = []
 
                     ann.detected_objects = {"objects": detections, "_checksum": ""}
                     ann.auto_labels = {"labels": detections, "batch_inferred": True}
                     ann.status = AnnotationStatus.AUTO_LABELED
+                    ann.model_version = "yolov8-seg-1.0"
                     processed += 1
 
             except Exception:
@@ -668,21 +701,32 @@ def auto_label_annotations_task(
 # Secure export (real status transitions + ExportLog entries)
 # ---------------------------------------------------------------------------
 
-async def _export_async(export_id: str) -> dict:
-    """Transition an export PENDING → PROCESSING → COMPLETED with ExportLog entries.
 
-    On failure, the Celery task handler transitions to FAILED and refunds escrow.
+async def _export_async(export_id: str) -> dict:
+    """Transition an export through WATERMARKING → PACKAGING → TRANSFERRING → COMPLETED.
+
+    On failure at any stage, the export is marked FAILED and a log entry recorded.
     """
+    import json
+    import os
+    import zipfile
+    from collections import Counter
+
+    import cv2
+    import numpy as np
     from sqlalchemy import select
 
+    from app.core.config import settings
     from app.core.database import async_session
+    from app.models.annotation import Annotation
+    from app.models.dataset import Dataset
     from app.models.enums import ExportStatus
     from app.models.export import Export, ExportLog
 
+    EXPORT_DIR = "/tmp/edgevision_exports"
+
     async with async_session() as db:
-        result = await db.execute(
-            select(Export).where(Export.id == export_id).with_for_update()
-        )
+        result = await db.execute(select(Export).where(Export.id == export_id).with_for_update())
         export = result.scalar_one_or_none()
         if export is None:
             raise ValueError(f"Export {export_id} not found")
@@ -697,8 +741,194 @@ async def _export_async(export_id: str) -> dict:
         )
         await db.commit()
 
-        logger.info("Export %s: secure transfer starting", export_id)
+        logger.info("Export %s: pipeline starting", export_id)
 
+        # --- Resolve dataset + buyer info for watermark text ---
+        ds_result = await db.execute(select(Dataset).where(Dataset.id == export.dataset_id))
+        dataset = ds_result.scalar_one_or_none()
+        dataset_slug = dataset.name.replace(" ", "_").lower() if dataset else "unknown"
+        buyer_name = f"buyer_{str(export.buyer_id)[:8]}"
+        watermark_text = f"{dataset_slug} | {buyer_name}"
+
+        # --- Fetch annotations for this dataset ---
+        ann_result = await db.execute(
+            select(Annotation).where(Annotation.dataset_id == export.dataset_id)
+        )
+        annotations = list(ann_result.scalars().all())
+
+        file_size = 0
+        watermarked_count = 0
+
+        # --- Stage 1: WATERMARKING ---
+        try:
+            db.add(
+                ExportLog(
+                    export_id=export.id,
+                    event_type="WATERMARKING_STARTED",
+                    details={
+                        "annotation_count": len(annotations),
+                        "watermark_text": watermark_text,
+                    },
+                )
+            )
+            await db.commit()
+
+            export_dir = os.path.join(EXPORT_DIR, str(export_id))
+            images_dir = os.path.join(export_dir, "images")
+            labels_dir = os.path.join(export_dir, "labels")
+            os.makedirs(images_dir, exist_ok=True)
+            os.makedirs(labels_dir, exist_ok=True)
+
+            for ann in annotations:
+                label_data = {
+                    "image_path": ann.image_path,
+                    "detected_objects": ann.detected_objects,
+                    "auto_labels": ann.auto_labels,
+                    "human_labels": ann.human_labels,
+                    "qa_labels": ann.qa_labels,
+                    "status": str(ann.status),
+                    "iaa_score": ann.iaa_score,
+                }
+                label_file = os.path.join(labels_dir, f"{ann.id}.json")
+                with open(label_file, "w") as lf:
+                    json.dump(label_data, lf, indent=2, default=str)
+
+                # Attempt to load image from MinIO, watermark with cv2
+                try:
+                    from app.core.dependencies import get_minio_client_sync
+
+                    mc = get_minio_client_sync()
+                    img_obj = mc.get_object(settings.MINIO_BUCKET, ann.image_path)
+                    img_bytes = img_obj.read()
+                    img_obj.close()
+                    img_obj.release_conn()
+                    nparr = np.frombuffer(img_bytes, np.uint8)
+                    img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+                    if img is not None:
+                        h, w = img.shape[:2]
+                        font_scale = max(0.5, min(w, h) / 800.0)
+                        thickness = max(1, int(font_scale * 2))
+                        (tw, th), _ = cv2.getTextSize(
+                            watermark_text, cv2.FONT_HERSHEY_SIMPLEX, font_scale, thickness,
+                        )
+                        x = max(tw + 10, w // 2 - tw // 2)
+                        y = h - 20
+                        overlay = img.copy()
+                        cv2.putText(
+                            overlay, watermark_text, (x, y),
+                            cv2.FONT_HERSHEY_SIMPLEX, font_scale, (0, 0, 0), thickness,
+                        )
+                        img = cv2.addWeighted(overlay, 0.3, img, 0.7, 0)
+                        out_path = os.path.join(images_dir, f"{ann.id}.jpg")
+                        cv2.imwrite(out_path, img)
+                        watermarked_count += 1
+                except Exception as img_exc:
+                    logger.warning(
+                        "Export %s: could not watermark image %s: %s",
+                        export_id, ann.id, img_exc,
+                    )
+
+            db.add(
+                ExportLog(
+                    export_id=export.id,
+                    event_type="WATERMARKING_COMPLETED",
+                    details={"watermarked_count": watermarked_count},
+                )
+            )
+            await db.commit()
+            logger.info("Export %s: watermarking done (%d/%d)", export_id, watermarked_count, len(annotations))
+
+        except Exception as exc:
+            export.status = ExportStatus.FAILED
+            db.add(
+                ExportLog(
+                    export_id=export.id,
+                    event_type="WATERMARKING_FAILED",
+                    details={"error": str(exc)},
+                )
+            )
+            await db.commit()
+            raise
+
+        # --- Stage 2: PACKAGING ---
+        try:
+            db.add(
+                ExportLog(
+                    export_id=export.id,
+                    event_type="PACKAGING_STARTED",
+                    details={"formats": export.formats_delivered},
+                )
+            )
+            await db.commit()
+
+            zip_path = os.path.join(export_dir, "dataset.zip")
+            with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
+                for fname in os.listdir(images_dir):
+                    zf.write(os.path.join(images_dir, fname), f"images/{fname}")
+                for fname in os.listdir(labels_dir):
+                    zf.write(os.path.join(labels_dir, fname), f"labels/{fname}")
+
+            file_size = os.path.getsize(zip_path)
+            export.file_size_bytes = file_size
+
+            db.add(
+                ExportLog(
+                    export_id=export.id,
+                    event_type="PACKAGING_COMPLETED",
+                    details={"zip_path": zip_path, "file_size_bytes": file_size},
+                )
+            )
+            await db.commit()
+            logger.info("Export %s: packaging done (%d bytes)", export_id, file_size)
+
+        except Exception as exc:
+            export.status = ExportStatus.FAILED
+            db.add(
+                ExportLog(
+                    export_id=export.id,
+                    event_type="PACKAGING_FAILED",
+                    details={"error": str(exc)},
+                )
+            )
+            await db.commit()
+            raise
+
+        # --- Stage 3: TRANSFERRING (local fallback — MinIO down) ---
+        try:
+            db.add(
+                ExportLog(
+                    export_id=export.id,
+                    event_type="TRANSFERRING_STARTED",
+                    details={"destination": "local_file"},
+                )
+            )
+            await db.commit()
+
+            export.delivery_url = zip_path
+
+            db.add(
+                ExportLog(
+                    export_id=export.id,
+                    event_type="TRANSFERRING_COMPLETED",
+                    details={"delivery_url": zip_path},
+                )
+            )
+            await db.commit()
+            logger.info("Export %s: transfer complete (local: %s)", export_id, zip_path)
+
+        except Exception as exc:
+            export.status = ExportStatus.FAILED
+            db.add(
+                ExportLog(
+                    export_id=export.id,
+                    event_type="TRANSFERRING_FAILED",
+                    details={"error": str(exc)},
+                )
+            )
+            await db.commit()
+            raise
+
+        # --- Finalize ---
         export.status = ExportStatus.COMPLETED
         export.completed_at = datetime.now(UTC)
         export.delivery_confirmed = True
@@ -709,6 +939,7 @@ async def _export_async(export_id: str) -> dict:
                 details={
                     "completed_at": export.completed_at.isoformat(),
                     "formats": export.formats_delivered,
+                    "file_size_bytes": file_size,
                 },
             )
         )
@@ -719,6 +950,8 @@ async def _export_async(export_id: str) -> dict:
             "buyer_id": str(export.buyer_id),
             "dataset_id": str(export.dataset_id),
             "formats": export.formats_delivered,
+            "file_size_bytes": file_size,
+            "watermarked_images": watermarked_count,
         }
 
 
@@ -736,9 +969,11 @@ def export_dataset_task(export_id: str) -> bool:
         logger.info("Export %s completed", export_id)
         _run_async(
             _write_audit_log(
-                "EXPORT_COMPLETED", "INFO",
+                "EXPORT_COMPLETED",
+                "INFO",
                 {"export_id": export_id, "status": "success", **summary},
-                resource_type="export", resource_id=export_id,
+                resource_type="export",
+                resource_id=export_id,
             )
         )
         return True
@@ -754,9 +989,7 @@ def export_dataset_task(export_id: str) -> bool:
 
             async def _fail_export(exc_info: str):
                 async with async_session() as db:
-                    result = await db.execute(
-                        sa_select(Export).where(Export.id == export_id).with_for_update()
-                    )
+                    result = await db.execute(sa_select(Export).where(Export.id == export_id).with_for_update())
                     exp = result.scalar_one_or_none()
                     if exp and exp.status not in (ExportStatus.COMPLETED, ExportStatus.FAILED):
                         exp.status = ExportStatus.FAILED
@@ -770,6 +1003,7 @@ def export_dataset_task(export_id: str) -> bool:
                         await db.commit()
 
                         from app.services.billing import refund_escrow
+
                         await refund_escrow(db, exp.id, reason="celery_retries_exhausted")
                         await db.commit()
 
@@ -779,9 +1013,11 @@ def export_dataset_task(export_id: str) -> bool:
 
         _run_async(
             _write_audit_log(
-                "EXPORT_FAILED", "ERROR",
+                "EXPORT_FAILED",
+                "ERROR",
                 {"export_id": export_id, "error": str(exc)},
-                resource_type="export", resource_id=export_id,
+                resource_type="export",
+                resource_id=export_id,
             )
         )
         raise
@@ -790,6 +1026,7 @@ def export_dataset_task(export_id: str) -> bool:
 # ---------------------------------------------------------------------------
 # Annotator payroll
 # ---------------------------------------------------------------------------
+
 
 async def _pay_annotators_async() -> dict:
     from decimal import Decimal
@@ -827,9 +1064,7 @@ async def _pay_annotators_async() -> dict:
                 annotation_pay_mwk = wage_mwk
             pay_usd = (annotation_pay_mwk * Decimal(str(settings.MWK_TO_USD_RATE))).quantize(Decimal("0.01"))
 
-            user_result = await db.execute(
-                select(User).where(User.id == row.annotator_id).with_for_update()
-            )
+            user_result = await db.execute(select(User).where(User.id == row.annotator_id).with_for_update())
             user = user_result.scalar_one_or_none()
             if user:
                 user.credit_balance_usd = (user.credit_balance_usd or Decimal("0.00")) + pay_usd
@@ -860,7 +1095,8 @@ def pay_annotators_task() -> bool:
         logger.info("Annotator payments processed: %s", summary)
         _run_async(
             _write_audit_log(
-                "PAYROLL_COMPLETED", "INFO",
+                "PAYROLL_COMPLETED",
+                "INFO",
                 {"status": "success", **summary},
                 resource_type="payroll",
             )
@@ -870,7 +1106,8 @@ def pay_annotators_task() -> bool:
         logger.error("Failed to pay annotators: %s", exc)
         _run_async(
             _write_audit_log(
-                "PAYROLL_FAILED", "ERROR",
+                "PAYROLL_FAILED",
+                "ERROR",
                 {"error": str(exc), "traceback": traceback.format_exc()},
                 resource_type="payroll",
             )
@@ -881,6 +1118,7 @@ def pay_annotators_task() -> bool:
 # ---------------------------------------------------------------------------
 # Heartbeat timeout check (C-i)
 # ---------------------------------------------------------------------------
+
 
 async def _check_heartbeat_timeouts_async() -> list[dict]:
     from app.core.database import async_session
@@ -905,7 +1143,8 @@ def check_heartbeat_timeouts_task() -> bool:
             logger.warning("Found %d nodes with timed-out heartbeats", len(timed_out))
             _run_async(
                 _write_audit_log(
-                    "HEARTBEAT_TIMEOUT_CHECK", "WARNING",
+                    "HEARTBEAT_TIMEOUT_CHECK",
+                    "WARNING",
                     {"timed_out_count": len(timed_out), "nodes": timed_out},
                     resource_type="fleet",
                 )
@@ -918,7 +1157,8 @@ def check_heartbeat_timeouts_task() -> bool:
         logger.error("Failed to check heartbeat timeouts: %s", exc)
         _run_async(
             _write_audit_log(
-                "HEARTBEAT_TIMEOUT_CHECK_FAILED", "ERROR",
+                "HEARTBEAT_TIMEOUT_CHECK_FAILED",
+                "ERROR",
                 {"error": str(exc), "traceback": traceback.format_exc()},
                 resource_type="fleet",
             )
@@ -929,6 +1169,7 @@ def check_heartbeat_timeouts_task() -> bool:
 # ---------------------------------------------------------------------------
 # Stuck batch reconciliation (self-healing safety net for broker outages)
 # ---------------------------------------------------------------------------
+
 
 async def _reconcile_stuck_batches_async() -> list[dict]:
     """Re-dispatch auto_label_task for PENDING batches older than the threshold.
@@ -946,9 +1187,7 @@ async def _reconcile_stuck_batches_async() -> list[dict]:
     from app.models.enums import BatchStatus
     from app.models.ingestion import IngestionBatch
 
-    threshold = datetime.now(UTC) - timedelta(
-        minutes=settings.STUCK_BATCH_THRESHOLD_MINUTES
-    )
+    threshold = datetime.now(UTC) - timedelta(minutes=settings.STUCK_BATCH_THRESHOLD_MINUTES)
 
     async with async_session() as db:
         result = await db.execute(
@@ -963,12 +1202,15 @@ async def _reconcile_stuck_batches_async() -> list[dict]:
         for batch in stuck_batches:
             try:
                 from app.workers.tasks import auto_label_task
+
                 auto_label_task.delay(str(batch.id))
-                redispatched.append({
-                    "batch_id": batch.batch_id,
-                    "node_id": str(batch.node_id),
-                    "created_at": batch.created_at.isoformat(),
-                })
+                redispatched.append(
+                    {
+                        "batch_id": batch.batch_id,
+                        "node_id": str(batch.node_id),
+                        "created_at": batch.created_at.isoformat(),
+                    }
+                )
                 logger.info(
                     "Re-dispatched stuck batch %s (created %s)",
                     batch.batch_id,
@@ -996,12 +1238,11 @@ def reconcile_stuck_batches_task() -> bool:
         logger.info("Checking for stuck PENDING batches")
         redispatched = _run_async(_reconcile_stuck_batches_async())
         if redispatched:
-            logger.warning(
-                "Re-dispatched %d stuck batches", len(redispatched)
-            )
+            logger.warning("Re-dispatched %d stuck batches", len(redispatched))
             _run_async(
                 _write_audit_log(
-                    "BATCH_RECONCILIATION_REDISPATCHED", "WARNING",
+                    "BATCH_RECONCILIATION_REDISPATCHED",
+                    "WARNING",
                     {
                         "redispatched_count": len(redispatched),
                         "batches": redispatched,
@@ -1017,7 +1258,8 @@ def reconcile_stuck_batches_task() -> bool:
         logger.error("Failed to reconcile stuck batches: %s", exc)
         _run_async(
             _write_audit_log(
-                "BATCH_RECONCILIATION_FAILED", "ERROR",
+                "BATCH_RECONCILIATION_FAILED",
+                "ERROR",
                 {"error": str(exc), "traceback": traceback.format_exc()},
                 resource_type="ingestion_batch",
             )
@@ -1026,266 +1268,28 @@ def reconcile_stuck_batches_task() -> bool:
 
 
 # ---------------------------------------------------------------------------
-# Studio: Dedup analysis (Phase 3)
+# Studio: Dedup analysis (Phase 3) — REMOVED: canonical impl in app/tasks/studio_tasks.py
 # ---------------------------------------------------------------------------
 
-async def _dedup_analyze_async(
-    dataset_id: str, methods: list[str], threshold: float
-) -> dict:
-    from app.core.database import async_session
-    from app.services.dedup import analyze, save_groups
-
-    async with async_session() as db:
-        clusters = await analyze(db, dataset_id, methods, threshold)
-        groups_saved = await save_groups(db, dataset_id, clusters)
-        return {
-            "dataset_id": dataset_id,
-            "methods": methods,
-            "threshold": threshold,
-            "groups_found": groups_saved,
-            "clusters": [
-                {
-                    "group_id": c.group_id,
-                    "similarity": c.similarity,
-                    "method": c.method,
-                    "image_count": len(c.images),
-                }
-                for c in clusters
-            ],
-        }
-
-
-@shared_task(
-    name="studio.dedup_analyze",
-    autoretry_for=(Exception,),
-    max_retries=3,
-    retry_backoff=True,
-    retry_backoff_max=300,
-)
-def dedup_analyze_task(dataset_id: str, methods: list[str], threshold: float) -> dict:
-    try:
-        logger.info("Running dedup analysis on dataset %s (methods=%s)", dataset_id, methods)
-        result = _run_async(_dedup_analyze_async(dataset_id, methods, threshold))
-        logger.info("Dedup analysis completed: %s groups found", result["groups_found"])
-        _run_async(
-            _write_audit_log(
-                "DEDUP_ANALYSIS_COMPLETED", "INFO",
-                {"dataset_id": dataset_id, "status": "success", **result},
-                resource_type="dataset", resource_id=dataset_id,
-            )
-        )
-        return result
-    except Exception as exc:
-        logger.error("Failed dedup analysis on %s: %s", dataset_id, exc)
-        _run_async(
-            _write_audit_log(
-                "DEDUP_ANALYSIS_FAILED", "ERROR",
-                {"dataset_id": dataset_id, "error": str(exc)},
-                resource_type="dataset", resource_id=dataset_id,
-            )
-        )
-        raise
+# The studio.dedup_analyze and studio.export_build tasks are defined in
+# app/tasks/studio_tasks.py (newer file with audit logging + proper _mark_export_failed).
+# Duplicate definitions here are commented out to avoid Celery registration conflicts.
+# Celery auto-discovers via app.workers and app.tasks.studio_tasks is explicitly
+# imported in celery_app.py.
 
 
 # ---------------------------------------------------------------------------
-# Studio: Export build (Phase 3) — generates COCO JSON
+# Studio: Export build (Phase 3) — REMOVED: canonical impl in app/tasks/studio_tasks.py
 # ---------------------------------------------------------------------------
 
-async def _export_build_async(
-    job_id: str, dataset_id: str, fmt: str,
-    split_config: dict, augmentations: dict | None,
-    stratify: list[str], watermark: bool,
-) -> dict:
-    import io as _io
-    import json as json_mod
-    from datetime import datetime
-    from uuid import UUID
-
-    from sqlalchemy import select
-
-    from app.core.config import settings
-    from app.core.database import async_session
-    from app.models.annotation import Annotation
-    from app.models.dataset import Dataset
-    from app.models.studio import ExportJob
-
-    async with async_session() as db:
-        job = (await db.execute(
-            select(ExportJob).where(ExportJob.id == UUID(job_id))
-        )).scalar_one_or_none()
-        if job is None:
-            raise ValueError(f"Export job {job_id} not found")
-        job.status = "PROCESSING"
-        await db.commit()
-
-        ds = (await db.execute(
-            select(Dataset).where(Dataset.dataset_id == dataset_id)
-        )).scalar_one_or_none()
-        if ds is None:
-            raise ValueError(f"Dataset {dataset_id} not found")
-
-        anns = (await db.execute(
-            select(Annotation)
-            .where(Annotation.dataset_id == ds.id)
-            .order_by(Annotation.image_index)
-        )).scalars().all()
-
-        coco = {
-            "info": {
-                "description": f"EdgeVision Export — {dataset_id}",
-                "version": "1.0",
-                "year": datetime.now(UTC).year,
-                "date_created": datetime.now(UTC).isoformat(),
-            },
-            "licenses": [],
-            "images": [],
-            "annotations": [],
-            "categories": [],
-        }
-
-        labels_seen: dict[str, int] = {}
-        ann_id_counter = 1
-
-        for img_idx, ann in enumerate(anns):
-            coco["images"].append({
-                "id": img_idx + 1,
-                "file_name": ann.image_path.split("/")[-1],
-                "width": 640,
-                "height": 480,
-            })
-
-            if ann.human_labels and isinstance(ann.human_labels, dict):
-                boxes = ann.human_labels.get("boxes", [])
-                for box in boxes:
-                    label = box.get("label", "unknown")
-                    if label not in labels_seen:
-                        labels_seen[label] = len(labels_seen) + 1
-                        coco["categories"].append({
-                            "id": labels_seen[label],
-                            "name": label,
-                            "supercategory": "object",
-                        })
-
-                    x = box.get("x", 0) * 640
-                    y = box.get("y", 0) * 480
-                    w = box.get("width", 0) * 640
-                    h = box.get("height", 0) * 480
-
-                    coco["annotations"].append({
-                        "id": ann_id_counter,
-                        "image_id": img_idx + 1,
-                        "category_id": labels_seen[label],
-                        "bbox": [round(x, 1), round(y, 1), round(w, 1), round(h, 1)],
-                        "area": round(w * h, 1),
-                        "iscrowd": 0,
-                    })
-                    ann_id_counter += 1
-
-        coco_json = json_mod.dumps(coco, indent=2).encode()
-        object_name = f"exports/{job_id}/coco.json"
-        download_url = None
-
-        try:
-            from app.core.dependencies import get_minio_client_sync
-            mc = get_minio_client_sync()
-            if mc is not None:
-                bucket = settings.MINIO_BUCKET
-                mc.put_object(
-                    bucket, object_name,
-                    _io.BytesIO(coco_json), len(coco_json),
-                    content_type="application/json",
-                )
-                download_url = f"/api/v1/studio/exports/{job_id}/download"
-        except Exception:
-            pass
-
-        if download_url is None:
-            import os
-            os.makedirs(f"/tmp/edgevision-exports/{job_id}", exist_ok=True)
-            local_path = f"/tmp/edgevision-exports/{job_id}/coco.json"
-            with open(local_path, "wb") as f:
-                f.write(coco_json)
-            download_url = f"file://{local_path}"
-
-        job.status = "COMPLETED"
-        job.progress_pct = 100.0
-        job.file_size_bytes = len(coco_json)
-        job.download_url = download_url
-        job.completed_at = datetime.now(UTC)
-        await db.commit()
-
-        return {
-            "job_id": job_id,
-            "dataset_id": dataset_id,
-            "format": fmt,
-            "images": len(coco["images"]),
-            "annotations": len(coco["annotations"]),
-            "categories": len(coco["categories"]),
-            "file_size_bytes": len(coco_json),
-            "download_url": download_url,
-        }
-
-
-@shared_task(
-    name="studio.export_build",
-    autoretry_for=(Exception,),
-    max_retries=3,
-    retry_backoff=True,
-    retry_backoff_max=600,
-)
-def export_build_task(
-    job_id: str, dataset_id: str, fmt: str,
-    split_config: dict, augmentations: dict | None,
-    stratify: list[str], watermark: bool,
-) -> dict:
-    try:
-        logger.info("Building export %s for dataset %s (format=%s)", job_id, dataset_id, fmt)
-        result = _run_async(
-            _export_build_async(job_id, dataset_id, fmt, split_config, augmentations, stratify, watermark)
-        )
-        logger.info("Export %s completed: %s", job_id, result)
-        _run_async(
-            _write_audit_log(
-                "EXPORT_BUILD_COMPLETED", "INFO",
-                {"job_id": job_id, "status": "success", **result},
-                resource_type="export_job", resource_id=job_id,
-            )
-        )
-        return result
-    except Exception as exc:
-        logger.error("Failed export build %s: %s", job_id, exc)
-        try:
-            async def _fail(exc_msg: str):
-                from uuid import UUID as _UUID
-
-                from sqlalchemy import select as sa_select
-
-                from app.core.database import async_session as sess
-                from app.models.studio import ExportJob as EJ
-                async with sess() as db:
-                    job = (await db.execute(
-                        sa_select(EJ).where(EJ.id == _UUID(job_id))
-                    )).scalar_one_or_none()
-                    if job:
-                        job.status = "FAILED"
-                        job.error_message = exc_msg[:500]
-                        await db.commit()
-            _run_async(_fail(str(exc)))
-        except Exception:
-            logger.error("Failed to mark export job %s as FAILED", job_id)
-        _run_async(
-            _write_audit_log(
-                "EXPORT_BUILD_FAILED", "ERROR",
-                {"job_id": job_id, "dataset_id": dataset_id, "error": str(exc)},
-                resource_type="export_job", resource_id=job_id,
-            )
-        )
-        raise
+# Duplicate export_build_task removed. Canonical implementation lives in
+# app/tasks/studio_tasks.py with proper _mark_export_failed helper.
 
 
 # ---------------------------------------------------------------------------
 # Road segmentation auto-labeling (Phase 8)
 # ---------------------------------------------------------------------------
+
 
 async def _auto_label_road_async(
     image_ids: list[str],
@@ -1341,11 +1345,10 @@ async def _auto_label_road_async(
                             continue
 
                     from app.core.dependencies import get_minio_client_sync
+
                     mc = get_minio_client_sync()
 
-                    response = mc.get_object(
-                        settings.MINIO_BUCKET, annotation.image_path
-                    )
+                    response = mc.get_object(settings.MINIO_BUCKET, annotation.image_path)
                     pil_image = Image.open(io.BytesIO(response.read()))
                     if pil_image.mode != "RGB":
                         pil_image = pil_image.convert("RGB")
@@ -1449,7 +1452,8 @@ def auto_label_road_task(
         logger.info("Road auto-labeling completed: %s", summary)
         _run_async(
             _write_audit_log(
-                "ROAD_AUTO_LABEL_COMPLETED", "INFO",
+                "ROAD_AUTO_LABEL_COMPLETED",
+                "INFO",
                 {"status": "success", **summary},
                 resource_type="road_annotation",
             )
@@ -1459,7 +1463,8 @@ def auto_label_road_task(
         logger.error("Failed road auto-labeling: %s", exc)
         _run_async(
             _write_audit_log(
-                "ROAD_AUTO_LABEL_FAILED", "ERROR",
+                "ROAD_AUTO_LABEL_FAILED",
+                "ERROR",
                 {"error": str(exc), "traceback": traceback.format_exc()},
                 resource_type="road_annotation",
             )
@@ -1470,6 +1475,7 @@ def auto_label_road_task(
 # ---------------------------------------------------------------------------
 # Agri segmentation auto-labeling (Phase 8)
 # ---------------------------------------------------------------------------
+
 
 async def _auto_label_agri_async(
     image_ids: list[str],
@@ -1492,10 +1498,14 @@ async def _auto_label_agri_async(
 
     async with async_session() as init_db:
         crop_segmenter = await get_agri_crop_segmenter(
-            settings.AGRI_CROP_SEG_MODEL_PATH, device, db=init_db,
+            settings.AGRI_CROP_SEG_MODEL_PATH,
+            device,
+            db=init_db,
         )
         health_segmenter = await get_agri_health_segmenter(
-            settings.AGRI_HEALTH_SEG_MODEL_PATH, device, db=init_db,
+            settings.AGRI_HEALTH_SEG_MODEL_PATH,
+            device,
+            db=init_db,
         )
 
     processed = 0
@@ -1510,11 +1520,10 @@ async def _auto_label_agri_async(
                     continue
 
                 from app.core.dependencies import get_minio_client_sync
+
                 mc = get_minio_client_sync()
 
-                response = mc.get_object(
-                    settings.MINIO_BUCKET, annotation.image_path
-                )
+                response = mc.get_object(settings.MINIO_BUCKET, annotation.image_path)
                 pil_image = Image.open(io.BytesIO(response.read()))
                 if pil_image.mode != "RGB":
                     pil_image = pil_image.convert("RGB")
@@ -1526,9 +1535,7 @@ async def _auto_label_agri_async(
                 crop_type = dominant_class_name(crop_results, default="maize")
                 health_status = dominant_class_name(health_results, default="healthy")
 
-                existing = await db.execute(
-                    select(AgriAnnotation).where(AgriAnnotation.annotation_id == annotation.id)
-                )
+                existing = await db.execute(select(AgriAnnotation).where(AgriAnnotation.annotation_id == annotation.id))
                 existing_aa = existing.scalar_one_or_none()
 
                 instances_data = [
@@ -1592,13 +1599,12 @@ def auto_label_agri_task(
             "Running agri auto-labeling on %d images",
             len(image_ids),
         )
-        summary = _run_async(
-            _auto_label_agri_async(image_ids, conf_threshold, iou_threshold)
-        )
+        summary = _run_async(_auto_label_agri_async(image_ids, conf_threshold, iou_threshold))
         logger.info("Agri auto-labeling completed: %s", summary)
         _run_async(
             _write_audit_log(
-                "AGRI_AUTO_LABEL_COMPLETED", "INFO",
+                "AGRI_AUTO_LABEL_COMPLETED",
+                "INFO",
                 {"status": "success", **summary},
                 resource_type="agri_annotation",
             )
@@ -1608,7 +1614,8 @@ def auto_label_agri_task(
         logger.error("Failed agri auto-labeling: %s", exc)
         _run_async(
             _write_audit_log(
-                "AGRI_AUTO_LABEL_FAILED", "ERROR",
+                "AGRI_AUTO_LABEL_FAILED",
+                "ERROR",
                 {"error": str(exc), "traceback": traceback.format_exc()},
                 resource_type="agri_annotation",
             )
@@ -1619,6 +1626,7 @@ def auto_label_agri_task(
 # ---------------------------------------------------------------------------
 # Consent expiry — batch expire stale consents (beat schedule: 02:00 UTC daily)
 # ---------------------------------------------------------------------------
+
 
 @shared_task(bind=True, name="workers.expire_consents")
 def expire_consents_task(self):
@@ -1677,6 +1685,7 @@ def expire_consents_task(self):
 # Consent data hard-delete (scheduled 24h after withdrawal)
 # ---------------------------------------------------------------------------
 
+
 async def _hard_delete_user_data_async(subject_hash: str) -> dict:
     from sqlalchemy import delete, select
 
@@ -1698,13 +1707,12 @@ async def _hard_delete_user_data_async(subject_hash: str) -> dict:
         annotation_ids = [row[0] for row in sa_result.all()]
 
         if annotation_ids:
-            anns = await db.execute(
-                select(Annotation).where(Annotation.id.in_(annotation_ids))
-            )
+            anns = await db.execute(select(Annotation).where(Annotation.id.in_(annotation_ids)))
             for ann in anns.scalars().all():
                 mc = None
                 try:
                     from app.core.dependencies import get_minio_client_sync
+
                     mc = get_minio_client_sync()
                 except Exception:
                     pass
@@ -1735,6 +1743,7 @@ async def _hard_delete_user_data_async(subject_hash: str) -> dict:
             await db.delete(c)
 
         from app.models.audit import AuditLog
+
         audit = AuditLog(
             event_type="USER_DATA_HARD_DELETED",
             severity="INFO",
@@ -1771,7 +1780,8 @@ def hard_delete_user_data_task(subject_hash: str) -> dict:
         _write_heartbeat("task:workers.hard_delete_user_data")
         _run_async(
             _write_audit_log(
-                "HARD_DELETE_COMPLETED", "INFO",
+                "HARD_DELETE_COMPLETED",
+                "INFO",
                 {"subject_hash": subject_hash, "status": "success", **result},
                 resource_type="consent_ledger",
                 resource_id=subject_hash,
@@ -1782,10 +1792,535 @@ def hard_delete_user_data_task(subject_hash: str) -> dict:
         logger.error("Failed to hard-delete user data for %s: %s", subject_hash, exc)
         _run_async(
             _write_audit_log(
-                "HARD_DELETE_FAILED", "ERROR",
+                "HARD_DELETE_FAILED",
+                "ERROR",
                 {"subject_hash": subject_hash, "error": str(exc)},
                 resource_type="consent_ledger",
                 resource_id=subject_hash,
+            )
+        )
+        raise
+
+
+# ---------------------------------------------------------------------------
+# D1: Operator stipend processing
+# ---------------------------------------------------------------------------
+@shared_task(
+    name="workers.process_operator_stipends",
+    bind=True,
+    autoretry_for=(Exception,),
+    max_retries=3,
+    retry_backoff=True,
+    retry_jitter=True,
+)
+def process_operator_stipends_task(self) -> dict:
+    """Monthly: credit stipend to active operators, create payout records."""
+
+    async def _run():
+        from sqlalchemy import select, update
+
+        from app.core.database import async_session
+        from app.models.operator import OperatorAccount, OperatorPayout
+
+        async with async_session() as db:
+            result = await db.execute(
+                select(OperatorAccount).where(OperatorAccount.is_active == True)
+            )
+            operators = result.scalars().all()
+            credited = 0
+            for op in operators:
+                stipend = settings.OPERATOR_STIPEND_MWK
+                payout = OperatorPayout(
+                    id=uuid4(),
+                    operator_id=op.id,
+                    amount_mwk=stipend,
+                    period_start=datetime.now(UTC).replace(day=1),
+                    period_end=datetime.now(UTC),
+                    status="pending",
+                )
+                db.add(payout)
+                op.stipend_balance_mwk += stipend
+                credited += 1
+            await db.commit()
+            return {"operators_credited": credited, "total_mwk": str(settings.OPERATOR_STIPEND_MWK * credited)}
+
+    result = _run_async(_run())
+    logger.info("process_operator_stipends_done", result=result)
+    return result
+
+
+# ---------------------------------------------------------------------------
+# D3: Daily consent SMS digest
+# ---------------------------------------------------------------------------
+@shared_task(
+    name="workers.daily_consent_sms_digest",
+    bind=True,
+    autoretry_for=(Exception,),
+    max_retries=3,
+    retry_backoff=True,
+    retry_jitter=True,
+)
+def daily_consent_sms_digest_task(self, dry_run: bool = False) -> dict:
+    """Daily: send SMS to newly captured subjects about consent.
+
+    Set *dry_run=True* to preserve the original logging-only behaviour for
+    testing without dispatching any SMS.
+    """
+    from datetime import timedelta
+
+    async def _run():
+        from sqlalchemy import select
+
+        from app.core.config import settings
+        from app.core.database import async_session
+        from app.models.consent import ConsentLedger
+        from app.models.subject import SubjectAnnotation
+        from app.services.alerts import _deliver_sms
+
+        async with async_session() as db:
+            yesterday = datetime.now(UTC) - timedelta(days=1)
+            result = await db.execute(
+                select(SubjectAnnotation.subject_hash)
+                .where(SubjectAnnotation.created_at >= yesterday)
+                .distinct()
+                .limit(100)
+            )
+            hashes = [row[0] for row in result.all()]
+            sms_sent = 0
+            sms_failed = 0
+            for h in hashes:
+                # Determine latest consent status for this subject
+                consent_result = await db.execute(
+                    select(ConsentLedger)
+                    .where(ConsentLedger.subject_hash == h)
+                    .order_by(ConsentLedger.signed_at.desc())
+                    .limit(1)
+                )
+                consent = consent_result.scalar_one_or_none()
+                consent_status = consent.status.value if consent else "UNKNOWN"
+
+                sms_text = (
+                    f"EdgeVision consent update: subject {h[:8]}... "
+                    f"status={consent_status}. "
+                    f"Reply HELP for assistance."
+                )
+
+                if dry_run or not settings.SMS_GATEWAY_URL:
+                    logger.info(
+                        "sms_digest_dry_run",
+                        subject_hash=h[:8],
+                        consent_status=consent_status,
+                    )
+                    sms_sent += 1
+                    continue
+
+                config = {"phone": settings.SMS_GATEWAY_URL}
+                payload = {
+                    "source": "edgevision",
+                    "event": {"type": "consent_digest", "subject_hash": h[:8]},
+                    "rule": {"text": sms_text},
+                }
+                try:
+                    delivery_result = await _deliver_sms(config, payload)
+                    if delivery_result.get("delivered"):
+                        sms_sent += 1
+                    else:
+                        sms_failed += 1
+                        logger.warning(
+                            "sms_digest_delivery_failed",
+                            subject_hash=h[:8],
+                            reason=delivery_result.get("reason"),
+                        )
+                except Exception as sms_exc:
+                    sms_failed += 1
+                    logger.error(
+                        "sms_digest_delivery_error",
+                        subject_hash=h[:8],
+                        error=str(sms_exc),
+                    )
+
+            return {
+                "subjects_notified": sms_sent,
+                "sms_failed": sms_failed,
+                "total_subjects": len(hashes),
+                "dry_run": dry_run,
+            }
+
+    result = _run_async(_run())
+    logger.info("daily_consent_sms_digest_done", result=result)
+    return result
+
+
+# ---------------------------------------------------------------------------
+# D3: Monthly airtime rewards
+# ---------------------------------------------------------------------------
+@shared_task(
+    name="workers.process_airtime_rewards",
+    bind=True,
+    autoretry_for=(Exception,),
+    max_retries=3,
+    retry_backoff=True,
+    retry_jitter=True,
+)
+def process_airtime_rewards_task(self, dry_run: bool = False) -> dict:
+    """Monthly: disburse airtime to subjects exceeding the threshold.
+
+    Set *dry_run=True* to test the selection logic without modifying balances
+    or making provider calls.
+    """
+
+    async def _run():
+        import httpx
+
+        from sqlalchemy import select
+
+        from app.core.config import settings as _cfg
+        from app.core.database import async_session
+        from app.models.subject_reward import SubjectReward
+
+        async with async_session() as db:
+            threshold = _cfg.SUBJECT_REWARD_THRESHOLD_MWK
+            result = await db.execute(
+                select(SubjectReward).where(
+                    SubjectReward.pending_airtime_mwk >= threshold,
+                    SubjectReward.is_active == True,
+                )
+            )
+            rewards = result.scalars().all()
+            disbursed = 0
+            failed = 0
+            skipped = 0
+            total_mwk = Decimal("0.00")
+
+            for r in rewards:
+                amount = r.pending_airtime_mwk
+
+                if dry_run:
+                    logger.info(
+                        "airtime_dry_run",
+                        subject_hash=r.subject_hash[:8],
+                        amount=str(amount),
+                    )
+                    skipped += 1
+                    continue
+
+                # Attempt provider payout if configured
+                if _cfg.AIRTIME_PROVIDER_URL:
+                    try:
+                        async with httpx.AsyncClient(timeout=10.0) as client:
+                            resp = await client.post(
+                                _cfg.AIRTIME_PROVIDER_URL,
+                                json={
+                                    "phone": r.phone_number,
+                                    "amount_mwk": str(amount),
+                                    "subject_hash": r.subject_hash[:8],
+                                },
+                                headers={"Authorization": f"Bearer {_cfg.AIRTIME_PROVIDER_API_KEY}"},
+                            )
+                        if 200 <= resp.status_code < 400:
+                            r.total_airtime_mwk += amount
+                            r.pending_airtime_mwk = Decimal("0.00")
+                            r.last_payout_at = datetime.now(UTC)
+                            total_mwk += amount
+                            disbursed += 1
+                            logger.info(
+                                "airtime_disbursed",
+                                subject_hash=r.subject_hash[:8],
+                                amount=str(amount),
+                            )
+                        else:
+                            failed += 1
+                            logger.warning(
+                                "airtime_provider_rejected",
+                                subject_hash=r.subject_hash[:8],
+                                status_code=resp.status_code,
+                            )
+                    except Exception as provider_exc:
+                        failed += 1
+                        logger.error(
+                            "airtime_provider_error",
+                            subject_hash=r.subject_hash[:8],
+                            error=str(provider_exc),
+                        )
+                else:
+                    # No provider configured — leave balance pending, log warning
+                    skipped += 1
+                    logger.warning(
+                        "airtime_no_provider",
+                        subject_hash=r.subject_hash[:8],
+                        pending_amount=str(amount),
+                    )
+
+            await db.commit()
+            return {
+                "subjects_disbursed": disbursed,
+                "subjects_failed": failed,
+                "subjects_skipped": skipped,
+                "total_mwk": str(total_mwk),
+                "threshold_mwk": str(threshold),
+                "dry_run": dry_run,
+            }
+
+    result = _run_async(_run())
+    logger.info("process_airtime_rewards_done", result=result)
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Frontier: Predictive Trajectory Modeling
+# ---------------------------------------------------------------------------
+
+
+async def _predict_trajectories_async(
+    camera_node_id: str,
+    active_tracks: list[dict],
+) -> dict:
+    """Batch-predict trajectories for all active tracks on a camera node."""
+    from app.core.database import async_session
+    from app.services.trajectory_prediction import (
+        check_road_intersection,
+        predict_trajectory,
+        store_trajectory_prediction,
+    )
+
+    now = datetime.now(UTC)
+    predictions_stored = 0
+
+    async with async_session() as db:
+        for track in active_tracks:
+            track_id = track.get("track_id")
+            if track_id is None:
+                continue
+
+            current_state = {
+                "x": float(track.get("x", 0.0)),
+                "y": float(track.get("y", 0.0)),
+                "z": float(track.get("z", 0.0)),
+                "vx": float(track.get("vx", 0.0)),
+                "vy": float(track.get("vy", 0.0)),
+                "vz": float(track.get("vz", 0.0)),
+                "class_name": track.get("class_name"),
+            }
+
+            history = track.get("history", [])
+            history.append({**current_state, "timestamp": now.isoformat()})
+
+            predictions = predict_trajectory(history)
+            road_intersection = check_road_intersection(
+                [p["position"] for p in predictions],
+                track.get("road_mask"),
+                track.get("lane_boundaries"),
+            )
+
+            await store_trajectory_prediction(
+                db=db,
+                track_id=track_id,
+                frame_timestamp=now,
+                current_state=current_state,
+                predictions=predictions,
+                road_intersection=road_intersection,
+            )
+            predictions_stored += 1
+
+        await db.commit()
+
+    return {"camera_node_id": camera_node_id, "predictions_stored": predictions_stored}
+
+
+@shared_task(
+    name="workers.predict_trajectories",
+    autoretry_for=(Exception,),
+    max_retries=3,
+    retry_backoff=True,
+    retry_backoff_max=120,
+    retry_jitter=True,
+)
+def predict_trajectories_task(camera_node_id: str, active_tracks: list[dict]) -> dict:
+    """Batch predict trajectories for active tracks."""
+    try:
+        logger.info("Predicting trajectories for %d tracks on camera %s", len(active_tracks), camera_node_id)
+        result = _run_async(_predict_trajectories_async(camera_node_id, active_tracks))
+        logger.info("Trajectory prediction completed: %s", result)
+        _write_heartbeat("task:workers.predict_trajectories")
+        return result
+    except Exception as exc:
+        logger.error("Failed trajectory prediction for camera %s: %s", camera_node_id, exc)
+        _run_async(
+            _write_audit_log(
+                "TRAJECTORY_PREDICTION_FAILED",
+                "ERROR",
+                {"camera_node_id": camera_node_id, "error": str(exc)},
+                resource_type="frontier",
+            )
+        )
+        raise
+
+
+# ---------------------------------------------------------------------------
+# Frontier: Open-Set Anomaly Detection
+# ---------------------------------------------------------------------------
+
+
+async def _detect_anomalies_async(camera_node_id: str, frame_data: dict) -> dict:
+    """Run anomaly detection on the latest frame for a camera."""
+    from app.core.database import async_session
+    from app.services.anomaly_detection import (
+        detect_anomaly,
+        store_anomaly,
+        update_scene_baseline,
+    )
+
+    now = datetime.now(UTC)
+
+    # Build embedding from frame data
+    detections = frame_data.get("detections", [])
+    embedding: dict = {
+        "object_counts": len(detections),
+        "class_distribution": {},
+        "road_ratio": float(frame_data.get("road_ratio", 0.0)),
+        "avg_confidence": 0.0,
+    }
+
+    total_conf = 0.0
+    for det in detections:
+        cls = det.get("class_name", det.get("label", "unknown"))
+        embedding["class_distribution"][cls] = embedding["class_distribution"].get(cls, 0) + 1
+        total_conf += float(det.get("confidence", 0.0))
+    if detections:
+        embedding["avg_confidence"] = total_conf / len(detections)
+
+    depth_stats = frame_data.get("depth_stats")
+    if depth_stats:
+        embedding["depth_histogram"] = depth_stats.get("histogram", {"near": 0, "mid": 0, "far": 0})
+
+    update_scene_baseline(camera_node_id, embedding)
+    result = detect_anomaly(camera_node_id, embedding)
+
+    if result is None:
+        return {"camera_node_id": camera_node_id, "anomaly_detected": False}
+
+    async with async_session() as db:
+        record = await store_anomaly(
+            db=db,
+            camera_node_id=camera_node_id,
+            timestamp=now,
+            anomaly_score=result["anomaly_score"],
+            anomaly_type=result["anomaly_type"],
+            description=result["description"],
+            features=result,
+            bounding_box=frame_data.get("bounding_box"),
+        )
+
+    return {
+        "camera_node_id": camera_node_id,
+        "anomaly_detected": True,
+        "anomaly_id": record.id,
+        "anomaly_type": result["anomaly_type"],
+        "anomaly_score": result["anomaly_score"],
+    }
+
+
+@shared_task(
+    name="workers.detect_anomalies",
+    autoretry_for=(Exception,),
+    max_retries=3,
+    retry_backoff=True,
+    retry_backoff_max=120,
+    retry_jitter=True,
+)
+def detect_anomalies_task(camera_node_id: str, frame_data: dict) -> dict:
+    """Run anomaly detection on latest frame."""
+    try:
+        logger.info("Running anomaly detection on camera %s", camera_node_id)
+        result = _run_async(_detect_anomalies_async(camera_node_id, frame_data))
+        if result.get("anomaly_detected"):
+            logger.warning(
+                "Anomaly detected on camera %s: type=%s score=%.4f",
+                camera_node_id,
+                result["anomaly_type"],
+                result["anomaly_score"],
+            )
+        else:
+            logger.info("No anomaly on camera %s", camera_node_id)
+        _write_heartbeat("task:workers.detect_anomalies")
+        return result
+    except Exception as exc:
+        logger.error("Failed anomaly detection for camera %s: %s", camera_node_id, exc)
+        _run_async(
+            _write_audit_log(
+                "ANOMALY_DETECTION_FAILED",
+                "ERROR",
+                {"camera_node_id": camera_node_id, "error": str(exc)},
+                resource_type="frontier",
+            )
+        )
+        raise
+
+
+# ---------------------------------------------------------------------------
+# Frontier: Living 3D Scene Reconstruction
+# ---------------------------------------------------------------------------
+
+
+async def _update_scene_reconstruction_async(
+    camera_node_id: str,
+    detections: list[dict],
+    depth_map: dict,
+    road_result: dict,
+) -> dict:
+    """Update the 3D scene snapshot for a camera node."""
+    from app.core.database import async_session
+    from app.services.scene_reconstruction import create_reconstruction_snapshot
+
+    async with async_session() as db:
+        record = await create_reconstruction_snapshot(
+            db=db,
+            camera_node_id=camera_node_id,
+            detections=detections,
+            depth_map=depth_map,
+            road_result=road_result,
+        )
+
+    return {
+        "camera_node_id": camera_node_id,
+        "reconstruction_id": record.id,
+        "num_objects": len(record.static_objects or []) + len(record.dynamic_objects or []),
+        "num_changes": len(record.change_events or []),
+        "quality": record.reconstruction_quality,
+    }
+
+
+@shared_task(
+    name="workers.update_scene_reconstruction",
+    autoretry_for=(Exception,),
+    max_retries=3,
+    retry_backoff=True,
+    retry_backoff_max=120,
+    retry_jitter=True,
+)
+def update_scene_reconstruction_task(
+    camera_node_id: str,
+    detections: list[dict],
+    depth_map: dict,
+    road_result: dict,
+) -> dict:
+    """Update 3D scene reconstruction."""
+    try:
+        logger.info("Updating scene reconstruction for camera %s", camera_node_id)
+        result = _run_async(
+            _update_scene_reconstruction_async(camera_node_id, detections, depth_map, road_result)
+        )
+        logger.info("Scene reconstruction completed: %s", result)
+        _write_heartbeat("task:workers.update_scene_reconstruction")
+        return result
+    except Exception as exc:
+        logger.error("Failed scene reconstruction for camera %s: %s", camera_node_id, exc)
+        _run_async(
+            _write_audit_log(
+                "SCENE_RECONSTRUCTION_FAILED",
+                "ERROR",
+                {"camera_node_id": camera_node_id, "error": str(exc)},
+                resource_type="frontier",
             )
         )
         raise

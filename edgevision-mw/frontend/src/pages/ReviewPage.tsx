@@ -65,9 +65,29 @@ interface IAAMetrics {
 
 type JobDialog = "certify" | "reject" | null;
 
+async function fetchReviewQueue(): Promise<ReviewItem[]> {
+  const token = localStorage.getItem("studio_token");
+  const resp = await fetch("/api/v1/review/queue", {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!resp.ok) throw new Error("Failed to load review queue");
+  const data = await resp.json();
+  return data.items || [];
+}
+
+async function fetchReviewDetail(id: string): Promise<{ detail: ReviewDetail | null; iaa: IAAMetrics | null }> {
+  const token = localStorage.getItem("studio_token");
+  const [detailResp, iaaResp] = await Promise.all([
+    fetch(`/api/v1/review/jobs/${id}`, { headers: { Authorization: `Bearer ${token}` } }),
+    fetch(`/api/v1/review/jobs/${id}/iaa`, { headers: { Authorization: `Bearer ${token}` } }),
+  ]);
+  const detail = detailResp.ok ? await detailResp.json() : null;
+  const iaa = iaaResp.ok ? await iaaResp.json() : null;
+  return { detail, iaa };
+}
+
 interface Props {
   assignmentId?: string;
-  onBack?: () => void;
 }
 
 function scoreTone(score: number): "good" | "fair" | "low" {
@@ -83,7 +103,7 @@ function reviewStatusVariant(status?: string): BadgeVariant {
   return "warning";
 }
 
-export default function ReviewPage({ assignmentId, onBack: _onBack }: Props) {
+export default function ReviewPage({ assignmentId }: Props) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { showToast } = useToast();
@@ -111,13 +131,7 @@ export default function ReviewPage({ assignmentId, onBack: _onBack }: Props) {
     setLoading(true);
     setLoadError(false);
     try {
-      const token = localStorage.getItem("studio_token");
-      const resp = await fetch("/api/v1/review/queue", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!resp.ok) throw new Error("Failed to load review queue");
-      const data = await resp.json();
-      setItems(data.items || []);
+      setItems(await fetchReviewQueue());
     } catch (err) {
       setLoadError(true);
       setMessage(String(err));
@@ -128,26 +142,48 @@ export default function ReviewPage({ assignmentId, onBack: _onBack }: Props) {
 
   const loadDetail = useCallback(async (id: string) => {
     try {
-      const token = localStorage.getItem("studio_token");
-      const [detailResp, iaaResp] = await Promise.all([
-        fetch(`/api/v1/review/jobs/${id}`, { headers: { Authorization: `Bearer ${token}` } }),
-        fetch(`/api/v1/review/jobs/${id}/iaa`, { headers: { Authorization: `Bearer ${token}` } }),
-      ]);
-      if (detailResp.ok) setSelected(await detailResp.json());
-      if (iaaResp.ok) setIaa(await iaaResp.json());
+      const { detail, iaa } = await fetchReviewDetail(id);
+      if (detail) setSelected(detail);
+      if (iaa) setIaa(iaa);
       setImageIdx(0);
     } catch (err) {
       setMessage(String(err));
     }
   }, []);
 
-  useEffect(() => { void loadQueue(); }, [loadQueue]);
-  useEffect(() => { if (assignmentId) void loadDetail(assignmentId); }, [assignmentId, loadDetail]);
+  useEffect(() => {
+    const load = async () => {
+      try {
+        setItems(await fetchReviewQueue());
+      } catch (err) {
+        setLoadError(true);
+        setMessage(String(err));
+      } finally {
+        setLoading(false);
+      }
+    };
+    void load();
+  }, []);
+
+  useEffect(() => {
+    if (!assignmentId) return;
+    const load = async () => {
+      try {
+        const { detail, iaa } = await fetchReviewDetail(assignmentId);
+        if (detail) setSelected(detail);
+        if (iaa) setIaa(iaa);
+        setImageIdx(0);
+      } catch (err) {
+        setMessage(String(err));
+      }
+    };
+    void load();
+  }, [assignmentId]);
 
   const sortedItems = useMemo(() => {
     const list = [...items];
     list.sort((a, b) => {
-      let cmp = 0;
+      let cmp: number;
       if (sortKey === "dataset_name") cmp = a.dataset_name.localeCompare(b.dataset_name);
       else if (sortKey === "progress") cmp = a.completed_images / a.total_images - b.completed_images / b.total_images;
       else if (sortKey === "status") cmp = (a.status || "").localeCompare(b.status || "");

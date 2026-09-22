@@ -1,10 +1,12 @@
 """Optimized inference path for live WebSocket annotation."""
+
 from __future__ import annotations
 
 import os
 
 import numpy as np
 
+from app.ai.metric_depth import attach_metric_depth
 from app.ai.mono_3d import attach_3d_boxes
 from app.ai.scene_objects import enrich_live_detections
 from app.ai.yolo_seg import SEG_TO_TAXONOMY, attach_masks_from_instances, get_yolo_seg_segmenter, mask_to_polygon
@@ -69,7 +71,7 @@ def run_seg_primary_detection(
 
     h, w = image.shape[:2]
     det_dicts = [_inst_to_track_dict(inst, w, h) for inst in instances]
-    tracked = tracker.update(det_dicts, image=None)
+    tracked = tracker.update(det_dicts, image=image)
     tracked = attach_masks_from_instances(tracked, instances, w, h)
 
     seg_capable = model_type in (
@@ -81,6 +83,108 @@ def run_seg_primary_detection(
     if LIVE_SCENE_ENRICH and seg_capable and model_type == ModelType.object_detection.value:
         tracked = enrich_live_detections(tracked, instances, image)
 
+    return tracked, instances
+
+
+def _seg_instances_to_track_dicts(
+    instances: list, img_w: int, img_h: int
+) -> list[dict]:
+    """Convert RoadSegmenter/AgriSegmenter InstanceMaskResult objects to track dicts."""
+    from app.ai.road_segmenter import ROAD_CLASS_NAMES
+
+    det_dicts: list[dict] = []
+    for inst in instances:
+        bbox = inst.bbox  # [x, y, w, h] normalized 0..1
+        if bbox[2] <= 1.0:
+            x1 = bbox[0] * img_w
+            y1 = bbox[1] * img_h
+            x2 = (bbox[0] + bbox[2]) * img_w
+            y2 = (bbox[1] + bbox[3]) * img_h
+        else:
+            x1, y1 = bbox[0], bbox[1]
+            x2, y2 = bbox[0] + bbox[2], bbox[1] + bbox[3]
+
+        taxonomy_label = inst.class_name
+        if inst.class_name in ROAD_CLASS_NAMES:
+            _ROAD_TAXONOMY = {
+                "good_road": "road_paved",
+                "pothole": "hazard_pothole",
+                "crack": "hazard_crack",
+                "dust_road": "road_unpaved",
+                "gravel_road": "road_unpaved",
+                "road_marking": "road_marking",
+                "shoulder": "road_boundary",
+            }
+            taxonomy_label = _ROAD_TAXONOMY.get(inst.class_name, inst.class_name)
+
+        entry: dict = {
+            "bbox": [x1, y1, x2, y2],
+            "class_name": inst.class_name,
+            "taxonomy_label": taxonomy_label,
+            "confidence": inst.confidence,
+        }
+        polygon = getattr(inst, "polygon", None)
+        if polygon:
+            entry["mask"] = polygon
+            entry["mask_format"] = "polygon"
+        det_dicts.append(entry)
+    return det_dicts
+
+
+async def preload_road_segmenter(db=None) -> "RoadSegmenter | None":
+    """Pre-load the road segmenter singleton (async DB lookup + local fallback)."""
+    from app.ai.road_segmenter import get_road_segmenter
+
+    return await get_road_segmenter(db=db)
+
+
+async def preload_agri_segmenter(model_type: str, db=None) -> "AgriSegmenter | None":
+    """Pre-load the appropriate agri segmenter singleton."""
+    from app.ai.agri_segmenter import get_agri_crop_segmenter, get_agri_health_segmenter
+
+    if model_type == ModelType.agri_health_classification.value:
+        return await get_agri_health_segmenter(db=db)
+    return await get_agri_crop_segmenter(db=db)
+
+
+def run_road_segmentation_live(
+    image: np.ndarray,
+    tracker,
+    conf_threshold: float = LIVE_CONF,
+    segmenter=None,
+) -> tuple[list[dict], list]:
+    """Live road segmentation using ONNX-based RoadSegmenter."""
+    if segmenter is None or not segmenter.is_loaded():
+        return [], []
+
+    instances = segmenter.segment(image, conf_threshold=conf_threshold)
+    if not instances:
+        return [], []
+
+    h, w = image.shape[:2]
+    det_dicts = _seg_instances_to_track_dicts(instances, w, h)
+    tracked = tracker.update(det_dicts, image=image)
+    return tracked, instances
+
+
+def run_agri_segmentation_live(
+    image: np.ndarray,
+    tracker,
+    model_type: str,
+    conf_threshold: float = LIVE_CONF,
+    segmenter=None,
+) -> tuple[list[dict], list]:
+    """Live agri segmentation using ONNX-based AgriSegmenter."""
+    if segmenter is None or not segmenter.is_loaded():
+        return [], []
+
+    instances = segmenter.segment(image, conf_threshold=conf_threshold)
+    if not instances:
+        return [], []
+
+    h, w = image.shape[:2]
+    det_dicts = _seg_instances_to_track_dicts(instances, w, h)
+    tracked = tracker.update(det_dicts, image=image)
     return tracked, instances
 
 
@@ -104,7 +208,7 @@ def run_engine_detection(
         }
         for d in detections
     ]
-    tracked = tracker.update(det_dicts, image=None)
+    tracked = tracker.update(det_dicts, image=image)
 
     seg_capable = model_type in (
         ModelType.object_detection.value,
@@ -159,10 +263,13 @@ def build_annotations(tracked: list[dict]) -> list[dict]:
         if isinstance(track_id, np.generic):
             track_id = int(track_id)
 
+        smoothed = t.get("smoothed_confidence", t["confidence"])
         ann: dict = {
             "class_name": t["class_name"],
             "taxonomy_label": SEG_TO_TAXONOMY.get(t["class_name"], t.get("taxonomy_label", t["class_name"])),
-            "confidence": round(float(t["confidence"]), 4),
+            "confidence": round(float(smoothed), 4),
+            "raw_confidence": round(float(t["confidence"]), 4),
+            "alert_active": bool(t.get("alert_active", False)),
             "bbox": [_json_safe(v) for v in xywh],
             "track_id": track_id,
             "mask_format": t.get("mask_format"),
@@ -171,6 +278,10 @@ def build_annotations(tracked: list[dict]) -> list[dict]:
             ann["mask"] = _json_safe(t["mask"])
         if t.get("bbox_3d"):
             ann["bbox_3d"] = _json_safe(t["bbox_3d"])
+        if t.get("distance_m") is not None:
+            ann["distance_m"] = _json_safe(t["distance_m"])
+        if t.get("distance_quality"):
+            ann["distance_quality"] = t["distance_quality"]
         annotations.append(ann)
     return annotations
 
@@ -186,4 +297,5 @@ def attach_depth_boxes(
     for det in tracked:
         if "taxonomy_label" not in det:
             det["taxonomy_label"] = SEG_TO_TAXONOMY.get(det.get("class_name", ""), det.get("class_name"))
+    tracked = attach_metric_depth(tracked, image.shape)
     return attach_3d_boxes(tracked, image, depth_map=depth_map, depth_available=depth_available)

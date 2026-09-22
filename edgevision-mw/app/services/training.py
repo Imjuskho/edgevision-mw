@@ -45,9 +45,8 @@ def _is_valid_onnx_file(path: str) -> bool:
 
 async def _load_job(db: AsyncSession, job_id: str) -> TrainingJob:
     from uuid import UUID as _UUID
-    result = await db.execute(
-        select(TrainingJob).where(TrainingJob.id == _UUID(job_id)).with_for_update()
-    )
+
+    result = await db.execute(select(TrainingJob).where(TrainingJob.id == _UUID(job_id)).with_for_update())
     job = result.scalar_one_or_none()
     if job is None:
         raise ValueError(f"Training job {job_id} not found")
@@ -66,9 +65,7 @@ async def _export_dataset_to_yolo(
     import minio
     from PIL import Image
 
-    ds_result = await db.execute(
-        select(Dataset).where(Dataset.dataset_id == dataset_id)
-    )
+    ds_result = await db.execute(select(Dataset).where(Dataset.dataset_id == dataset_id))
     dataset = ds_result.scalar_one_or_none()
     if dataset is None:
         raise ValueError(f"Dataset {dataset_id} not found")
@@ -137,9 +134,7 @@ async def _export_dataset_to_yolo(
             x_center = x + bw / 2
             y_center = y + bh / 2
 
-            label_lines.append(
-                f"{class_id} {x_center:.6f} {y_center:.6f} {bw:.6f} {bh:.6f}"
-            )
+            label_lines.append(f"{class_id} {x_center:.6f} {y_center:.6f} {bw:.6f} {bh:.6f}")
 
         label_path = labels_dir / f"{img_filename.rsplit('.', 1)[0]}.txt"
         with open(label_path, "w") as f:
@@ -152,11 +147,7 @@ async def _export_dataset_to_yolo(
 
     nc = len(class_names)
     data_yaml = (
-        f"path: {output_dir}\n"
-        f"train: images/train\n"
-        f"val: images/train\n"
-        f"nc: {nc}\n"
-        f"names: {json.dumps(class_names)}\n"
+        f"path: {output_dir}\ntrain: images/train\nval: images/train\nnc: {nc}\nnames: {json.dumps(class_names)}\n"
     )
 
     yaml_path = os.path.join(output_dir, "dataset.yaml")
@@ -240,11 +231,13 @@ def _run_yolo_training(
     artifact_path = os.path.join(output_dir, "best.pt")
     shutil.copy2(best_pt, artifact_path)
 
-    onnx_output = model.export(format='onnx', imgsz=640)
+    onnx_output = model.export(format="onnx", imgsz=640)
     if isinstance(onnx_output, (list, tuple)):
         onnx_output = onnx_output[0] if onnx_output else ""
     if isinstance(onnx_output, str) and os.path.isdir(onnx_output):
-        candidates = [os.path.join(onnx_output, entry) for entry in os.listdir(onnx_output) if entry.lower().endswith(".onnx")]
+        candidates = [
+            os.path.join(onnx_output, entry) for entry in os.listdir(onnx_output) if entry.lower().endswith(".onnx")
+        ]
         onnx_output = candidates[0] if candidates else onnx_output
     if isinstance(onnx_output, str) and _is_valid_onnx_file(onnx_output):
         onnx_artifact = os.path.join(output_dir, "best.onnx")
@@ -275,6 +268,7 @@ def _run_yolo_training(
 async def _update_job_progress(job_id: str, pct: int) -> None:
     async with async_session() as db:
         from uuid import UUID as _UUID
+
         job = await db.get(TrainingJob, _UUID(job_id))
         if job:
             job.progress_pct = pct
@@ -339,6 +333,7 @@ async def run_training(db: AsyncSession, job_id: str) -> None:
 
         async with async_session() as final_db:
             from uuid import UUID as _UUID
+
             final_job = await final_db.get(TrainingJob, _UUID(job_id))
             if final_job is None:
                 raise ValueError(f"Job {job_id} not found at completion")
@@ -364,9 +359,7 @@ async def run_training(db: AsyncSession, job_id: str) -> None:
                             file_stat.st_size,
                             content_type="application/octet-stream",
                         )
-                    final_job.artifact_path = (
-                        f"{settings.MINIO_ENDPOINT}/{settings.MINIO_BUCKET}/{object_name}"
-                    )
+                    final_job.artifact_path = f"{settings.MINIO_ENDPOINT}/{settings.MINIO_BUCKET}/{object_name}"
                     logger.info("Artifact uploaded to %s/%s", settings.MINIO_BUCKET, object_name)
 
                     onnx_local = progress.get("artifact_path_onnx", "")
@@ -387,9 +380,7 @@ async def run_training(db: AsyncSession, job_id: str) -> None:
                             ModelType.agri_health_classification,
                         }
                         if job.model_type in seg_types:
-                            final_job.artifact_path = (
-                                f"{settings.MINIO_ENDPOINT}/{settings.MINIO_BUCKET}/{onnx_object}"
-                            )
+                            final_job.artifact_path = f"{settings.MINIO_ENDPOINT}/{settings.MINIO_BUCKET}/{onnx_object}"
                             logger.info("artifact_path set to ONNX for %s", job.model_type.value)
                     elif onnx_local:
                         logger.warning("Skipping invalid ONNX artifact upload: %s", onnx_local)
@@ -408,6 +399,7 @@ async def run_training(db: AsyncSession, job_id: str) -> None:
         logger.error("Training job %s failed: %s", job_id, exc)
         async with async_session() as err_db:
             from uuid import UUID as _UUID
+
             err_job = await err_db.get(TrainingJob, _UUID(job_id))
             if err_job:
                 err_job.status = TrainingStatus.FAILED

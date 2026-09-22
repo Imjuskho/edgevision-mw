@@ -45,9 +45,7 @@ def validate_image(file_bytes: bytes) -> ImageMeta:
             raise ImageValidationError("Image has zero dimensions")
 
         if width > MAX_DIMENSION or height > MAX_DIMENSION:
-            raise ImageValidationError(
-                f"Image dimensions {width}x{height} exceed max {MAX_DIMENSION}x{MAX_DIMENSION}"
-            )
+            raise ImageValidationError(f"Image dimensions {width}x{height} exceed max {MAX_DIMENSION}x{MAX_DIMENSION}")
 
         has_alpha = img.mode in ("RGBA", "LA", "PA") or "transparency" in img.info
 

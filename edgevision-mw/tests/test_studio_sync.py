@@ -22,6 +22,7 @@ from app.models.enums import (
 from app.models.ingestion import IngestionBatch
 from app.models.node import Node
 from app.models.studio import AnnotationAction, AnnotationSession
+from tests.conftest import _create_node
 
 # ─── Helpers ───
 
@@ -40,30 +41,6 @@ async def _create_user(db, role="ANNOTATOR"):
     db.add(user)
     await db.commit()
     return user
-
-
-async def _create_node(db):
-    node = Node(
-        id=uuid4(),
-        node_id=f"SYNC-{uuid4().hex[:8]}",
-        district="Lilongwe",
-        latitude=-13.9626,
-        longitude=33.7741,
-        category=NodeCategory.ROAD,
-        hardware_profile={"gpu": "jetson"},
-        network_config={"apn": "airtel"},
-        capture_schedule="*/10 * * * *",
-        interest_classes=["vehicle", "pedestrian"],
-        pii_mode=PIIMode.STRICT,
-        firmware_version="1.0.0",
-        public_key=b"\x01" * 32,
-        status=NodeStatus.ONLINE,
-        is_enabled=True,
-    )
-    db.add(node)
-    await db.commit()
-    await db.refresh(node)
-    return node
 
 
 async def _create_dataset(db):
@@ -356,7 +333,10 @@ async def test_sync_delete_removes_labels(db_session, test_client, jwt_token_fac
     ds = await _create_dataset(db_session)
     batch = await _create_batch(db_session, node)
     ann = await _create_annotation(
-        db_session, ds, batch, image_index=20,
+        db_session,
+        ds,
+        batch,
+        image_index=20,
         human_labels={"boxes": [{"label": "car", "x": 0.1, "y": 0.2, "width": 0.3, "height": 0.4}]},
     )
 
@@ -533,10 +513,7 @@ async def test_sync_batch_increments_counter(db_session, test_client, jwt_token_
         headers=headers,
         json={
             "session_id": str(sess.id),
-            "actions": [
-                {"annotation_id": str(a.id), "action_type": "approve"}
-                for a in anns
-            ],
+            "actions": [{"annotation_id": str(a.id), "action_type": "approve"} for a in anns],
         },
     )
 

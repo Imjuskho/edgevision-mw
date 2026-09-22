@@ -84,7 +84,9 @@ async def get_node(
             "node_id": detail["node"].node_id,
             "district": detail["node"].district,
             "status": detail["node"].status.value if hasattr(detail["node"].status, "value") else detail["node"].status,
-            "last_heartbeat_at": detail["node"].last_heartbeat_at.isoformat() if detail["node"].last_heartbeat_at else None,
+            "last_heartbeat_at": detail["node"].last_heartbeat_at.isoformat()
+            if detail["node"].last_heartbeat_at
+            else None,
         },
         "recent_heartbeats": [
             {

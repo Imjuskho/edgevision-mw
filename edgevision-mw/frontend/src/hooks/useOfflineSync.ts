@@ -404,8 +404,15 @@ export function useOfflineSync(sessionId: string) {
   }, [triggerSync]);
 
   useEffect(() => {
-    void refreshStats();
-  }, [refreshStats]);
+    let cancelled = false;
+    (async () => {
+      const next = await updateGlobalStats();
+      if (!cancelled) setStats(next);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (!isOnline || !sessionId) return;

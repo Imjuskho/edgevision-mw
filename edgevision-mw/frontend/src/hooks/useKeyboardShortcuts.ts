@@ -20,7 +20,10 @@ export function useKeyboardShortcuts(
   } = options;
 
   const handlerRef = useRef(handler);
-  handlerRef.current = handler;
+
+  useEffect(() => {
+    handlerRef.current = handler;
+  }, [handler]);
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if (!enabled) return;

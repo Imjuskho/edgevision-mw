@@ -19,6 +19,7 @@ from app.models.enums import (
 from app.models.image import ImageRecord
 from app.models.ingestion import IngestionBatch
 from app.models.node import Node
+from tests.conftest import _create_node
 
 
 async def _create_user(db, role="ANNOTATOR"):
@@ -35,22 +36,6 @@ async def _create_user(db, role="ANNOTATOR"):
     db.add(user)
     await db.commit()
     return user
-
-
-async def _create_node(db):
-    node = Node(
-        id=uuid4(), node_id=f"STU-{uuid4().hex[:8]}",
-        district="Blantyre", latitude=-15.7861, longitude=35.0058,
-        category=NodeCategory.ROAD, hardware_profile={"gpu": "jetson"},
-        network_config={"apn": "airtel"}, capture_schedule="*/10 * * * *",
-        interest_classes=["vehicle"], pii_mode=PIIMode.STRICT,
-        firmware_version="1.0.0", public_key=b"\x01" * 32,
-        status=NodeStatus.ONLINE, is_enabled=True,
-    )
-    db.add(node)
-    await db.commit()
-    await db.refresh(node)
-    return node
 
 
 async def _create_batch(db, node):
@@ -74,16 +59,24 @@ async def _create_batch(db, node):
 
 async def _create_dataset(db):
     ds = Dataset(
-        id=uuid4(), dataset_id=f"DS-STUDIO-{uuid4().hex[:6]}",
-        name="Studio Test Dataset", version="1.0",
-        status=DatasetStatus.FOR_SALE, sample_count=10,
+        id=uuid4(),
+        dataset_id=f"DS-STUDIO-{uuid4().hex[:6]}",
+        name="Studio Test Dataset",
+        version="1.0",
+        status=DatasetStatus.FOR_SALE,
+        sample_count=10,
         classes={"vehicle": 1, "pedestrian": 2},
-        annotations_per_image=2.0, image_width=1920, image_height=1080,
+        annotations_per_image=2.0,
+        image_width=1920,
+        image_height=1080,
         geographic_coverage={"districts": ["Lilongwe"]},
         demographic_report={"age_groups": {}},
-        consent_coverage_pct=1.0, pii_scrub_verified=True,
-        iaa_score=0.90, formats=["COCO"],
-        price_usd=Decimal("100.00"), license_type=LicenseType.ANNUAL,
+        consent_coverage_pct=1.0,
+        pii_scrub_verified=True,
+        iaa_score=0.90,
+        formats=["COCO"],
+        price_usd=Decimal("100.00"),
+        license_type=LicenseType.ANNUAL,
     )
     db.add(ds)
     await db.commit()

@@ -37,6 +37,16 @@ function queueStatusVariant(status: string, overdue: boolean): BadgeVariant {
   return "default";
 }
 
+async function fetchQueueItems(): Promise<QueueItem[]> {
+  const token = localStorage.getItem("studio_token");
+  const resp = await fetch("/api/v1/assignments/queue", {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!resp.ok) throw new Error("Failed to load queue");
+  const data = await resp.json();
+  return data.items || [];
+}
+
 export default function QueuePage({ onStartAnnotation }: Props) {
   const { t } = useTranslation();
   const { showToast } = useToast();
@@ -53,13 +63,7 @@ export default function QueuePage({ onStartAnnotation }: Props) {
     setLoading(true);
     setError("");
     try {
-      const token = localStorage.getItem("studio_token");
-      const resp = await fetch("/api/v1/assignments/queue", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!resp.ok) throw new Error("Failed to load queue");
-      const data = await resp.json();
-      setItems(data.items || []);
+      setItems(await fetchQueueItems());
     } catch (err) {
       setError(String(err));
     } finally {
@@ -68,8 +72,17 @@ export default function QueuePage({ onStartAnnotation }: Props) {
   }, []);
 
   useEffect(() => {
-    void loadQueue();
-  }, [loadQueue]);
+    const load = async () => {
+      try {
+        setItems(await fetchQueueItems());
+      } catch (err) {
+        setError(String(err));
+      } finally {
+        setLoading(false);
+      }
+    };
+    void load();
+  }, []);
 
   const claimJob = async (assignmentId: string) => {
     setActionId(assignmentId);
@@ -117,7 +130,7 @@ export default function QueuePage({ onStartAnnotation }: Props) {
       return true;
     });
     list = [...list].sort((a, b) => {
-      let cmp = 0;
+      let cmp: number;
       if (sortKey === "dataset_name") cmp = a.dataset_name.localeCompare(b.dataset_name);
       else if (sortKey === "progress") cmp = a.progress_pct - b.progress_pct;
       else if (sortKey === "status") cmp = a.status.localeCompare(b.status);

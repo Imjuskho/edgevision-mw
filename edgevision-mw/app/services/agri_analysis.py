@@ -74,13 +74,19 @@ async def analyze_dataset_agri_condition(
         recommended_action = "Crop failure risk critical — immediate intervention required; consider irrigation, pest control, and soil amendment"
     elif health_score < 0.6:
         if weed_pressure == "high" and pest_risk == "high":
-            recommended_action = "Integrated pest and weed management needed — apply herbicides and pesticides, monitor crop recovery"
+            recommended_action = (
+                "Integrated pest and weed management needed — apply herbicides and pesticides, monitor crop recovery"
+            )
         elif weed_pressure == "high":
             recommended_action = "Weed control recommended — manual weeding or herbicide application advised"
         elif pest_risk == "high":
-            recommended_action = "Pest control recommended — apply appropriate pesticides and monitor for further spread"
+            recommended_action = (
+                "Pest control recommended — apply appropriate pesticides and monitor for further spread"
+            )
         else:
-            recommended_action = "Moderate crop stress detected — irrigation likely needed, consider nutrient supplementation"
+            recommended_action = (
+                "Moderate crop stress detected — irrigation likely needed, consider nutrient supplementation"
+            )
     elif health_score < 0.8 and (weed_images > 0 or pest_images > 0):
         recommended_action = "Spot treatment needed for detected weed or pest hotspots"
 

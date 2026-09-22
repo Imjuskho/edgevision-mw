@@ -13,8 +13,7 @@ from app.core.logging import get_logger
 logger = get_logger("edgevision.face_privacy")
 
 MODEL_URL = (
-    "https://github.com/opencv/opencv_zoo/raw/main/models/face_detection_yunet/"
-    "face_detection_yunet_2023mar.onnx"
+    "https://github.com/opencv/opencv_zoo/raw/main/models/face_detection_yunet/face_detection_yunet_2023mar.onnx"
 )
 CACHE_DIR = Path("/tmp/edgevision-face-model")
 
@@ -22,6 +21,7 @@ CACHE_DIR = Path("/tmp/edgevision-face-model")
 def _urlopen(url: str) -> io.BytesIO:
     try:
         import certifi
+
         ctx = ssl.create_default_context(cafile=certifi.where())
         return io.BytesIO(urllib.request.urlopen(url, context=ctx).read())
     except ImportError:

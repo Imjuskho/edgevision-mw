@@ -97,14 +97,19 @@ async def login(
         )
     user = await authenticate_user(db, body.email, body.password)
     if user is None:
-        trace(logger, "login_failed", trace_id=trace_id, email=body.email, client_ip=client_ip, reason="invalid_credentials")
+        trace(
+            logger,
+            "login_failed",
+            trace_id=trace_id,
+            email=body.email,
+            client_ip=client_ip,
+            reason="invalid_credentials",
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password",
         )
-    token = create_access_token(
-        data={"sub": str(user.id), "role": user.role, "email": user.email}
-    )
+    token = create_access_token(data={"sub": str(user.id), "role": user.role, "email": user.email})
     trace(logger, "login_success", trace_id=trace_id, user_id=str(user.id), email=user.email, role=user.role)
     return TokenResponse(
         access_token=token,
@@ -122,9 +127,7 @@ async def create_key(
     user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    raw_key, api_key = await create_api_key(
-        db, UUID(user["sub"]), body.model_dump()
-    )
+    raw_key, api_key = await create_api_key(db, UUID(user["sub"]), body.model_dump())
     return APIKeyCreateResponse(
         id=api_key.id,
         key_id=api_key.key_id,
@@ -201,9 +204,7 @@ async def get_me(
     user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    result = await db.execute(
-        select(User).where(User.id == UUID(user["sub"]))
-    )
+    result = await db.execute(select(User).where(User.id == UUID(user["sub"])))
     db_user = result.scalar_one_or_none()
     if db_user is None:
         raise HTTPException(

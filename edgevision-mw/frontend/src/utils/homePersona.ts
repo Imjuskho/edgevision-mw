@@ -69,7 +69,7 @@ export function getHomePersonaConfig(role: string | undefined): HomePersonaConfi
         showHealthRings: false,
         showReviewOps: false,
         showIngestion: false,
-        showMarketplacePlaceholder: true,
+        showMarketplacePlaceholder: false,
         primaryAction: "browse",
       };
     default:

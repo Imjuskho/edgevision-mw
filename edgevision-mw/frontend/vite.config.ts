@@ -1,6 +1,15 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { VitePWA } from "vite-plugin-pwa";
+import { existsSync, readFileSync } from "node:fs";
+
+const certBase = new URL("./.cert/", import.meta.url);
+const devHttps = existsSync(new URL("key.pem", certBase)) && existsSync(new URL("cert.pem", certBase))
+  ? {
+      key: readFileSync(new URL("key.pem", certBase)),
+      cert: readFileSync(new URL("cert.pem", certBase)),
+    }
+  : undefined;
 
 export default defineConfig({
   plugins: [
@@ -83,6 +92,8 @@ export default defineConfig({
   ],
   server: {
     port: 3000,
+    host: "0.0.0.0",
+    https: devHttps ?? undefined,
     proxy: {
       "/api": {
         target: "http://localhost:8000",

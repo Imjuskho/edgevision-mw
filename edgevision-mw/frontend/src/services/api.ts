@@ -266,7 +266,7 @@ export const studioApi = {
 
   syncBatch: (
     sessionId: string,
-    actions: Array<{ image_id: string; action_type: string; payload: any }>,
+    actions: Array<{ image_id: string; action_type: string; payload: unknown }>,
     ifMatch: string | undefined = "*"
   ) =>
     api.post(
@@ -319,6 +319,15 @@ export const studioApi = {
 
   sendNodeCommand: (nodeId: string, command: string, payload: Record<string, unknown> = {}) =>
     api.post(`/nodes/${nodeId}/command`, { command, payload }),
+
+  // Marketplace — quotes
+  requestQuote: (datasetId: string, licenseType: string, jurisdiction: string, useCase = "") =>
+    api.post("/datasets/quotes", {
+      dataset_id: datasetId,
+      license_type: licenseType,
+      jurisdiction,
+      use_case: useCase,
+    }),
 
   // Live Annotation
   saveLiveAnnotation: (formData: FormData) =>

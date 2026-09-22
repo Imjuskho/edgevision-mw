@@ -1,4 +1,5 @@
 """Tests for rate limiting (F7)."""
+
 import uuid
 
 import pytest
@@ -13,9 +14,9 @@ async def test_login_rate_limit_429(rate_limit_client):
             json={"email": f"ratelimit-{i}@test.com", "password": "wrongpass"},
         )
         if i < 5:
-            assert resp.status_code != 429, f"Request {i+1} should not be rate limited"
+            assert resp.status_code != 429, f"Request {i + 1} should not be rate limited"
         else:
-            assert resp.status_code == 429, f"Request {i+1} should be rate limited, got {resp.status_code}"
+            assert resp.status_code == 429, f"Request {i + 1} should be rate limited, got {resp.status_code}"
             assert "Retry-After" in resp.headers
 
 
@@ -32,9 +33,9 @@ async def test_register_rate_limit_429(rate_limit_client):
             },
         )
         if i < 3:
-            assert resp.status_code != 429, f"Request {i+1} should not be rate limited"
+            assert resp.status_code != 429, f"Request {i + 1} should not be rate limited"
         else:
-            assert resp.status_code == 429, f"Request {i+1} should be rate limited, got {resp.status_code}"
+            assert resp.status_code == 429, f"Request {i + 1} should be rate limited, got {resp.status_code}"
 
 
 @pytest.mark.asyncio

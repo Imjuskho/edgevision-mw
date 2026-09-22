@@ -6,6 +6,7 @@ from uuid import UUID, uuid4
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.logging import get_logger
 from app.models.annotation import Annotation, AnnotationAssignment
 from app.models.buyer import User
@@ -36,11 +37,7 @@ async def auto_assign_jobs(
         return []
 
     # Get available annotators, ordered by current workload (least busy first)
-    annotator_query = (
-        select(User)
-        .where(User.role == "ANNOTATOR", User.is_active.is_(True))
-        .order_by(User.id)
-    )
+    annotator_query = select(User).where(User.role == "ANNOTATOR", User.is_active.is_(True)).order_by(User.id)
     if target_annotator:
         annotator_query = annotator_query.where(User.id == target_annotator)
 
@@ -51,6 +48,7 @@ async def auto_assign_jobs(
 
     # Get current assignment counts for workload balancing
     from sqlalchemy import func as sqlfunc
+
     workload_result = await db.execute(
         select(
             AnnotationAssignment.annotator_id,
@@ -108,27 +106,35 @@ async def submit_labels(
     logger.info("svc_labels_start", trace_id=trace_id, annotation_id=str(annotation_id), annotator_id=str(annotator_id))
 
     # FOR UPDATE to prevent concurrent submission races (B1)
-    result = await db.execute(
-        select(Annotation)
-        .where(Annotation.id == annotation_id)
-        .with_for_update()
-    )
+    result = await db.execute(select(Annotation).where(Annotation.id == annotation_id).with_for_update())
     annotation = result.scalar_one_or_none()
     if annotation is None:
         logger.warning("svc_labels_not_found", trace_id=trace_id, annotation_id=str(annotation_id))
         raise ValueError("Annotation not found")
 
-    logger.info("svc_labels_found", trace_id=trace_id, image_path=annotation.image_path, current_status=annotation.status)
+    logger.info(
+        "svc_labels_found", trace_id=trace_id, image_path=annotation.image_path, current_status=annotation.status
+    )
 
     # Owner check: only the assigned annotator may submit labels
     if annotation.annotator_id != annotator_id:
-        logger.warning("svc_labels_unauthorized", trace_id=trace_id, owner=str(annotation.annotator_id), submitter=str(annotator_id))
+        logger.warning(
+            "svc_labels_unauthorized",
+            trace_id=trace_id,
+            owner=str(annotation.annotator_id),
+            submitter=str(annotator_id),
+        )
         raise ValueError("Not authorized: you are not assigned to this annotation")
 
     # Status guard: only HUMAN_REVIEW annotations accept labels (B1)
     current_status = annotation.status.value if hasattr(annotation.status, "value") else annotation.status
     if current_status != AnnotationStatus.HUMAN_REVIEW.value:
-        logger.warning("svc_labels_wrong_status", trace_id=trace_id, actual=current_status, expected=AnnotationStatus.HUMAN_REVIEW.value)
+        logger.warning(
+            "svc_labels_wrong_status",
+            trace_id=trace_id,
+            actual=current_status,
+            expected=AnnotationStatus.HUMAN_REVIEW.value,
+        )
         raise ValueError(
             f"Cannot submit labels on annotation in {current_status} status; "
             f"expected {AnnotationStatus.HUMAN_REVIEW.value}"
@@ -138,13 +144,18 @@ async def submit_labels(
     annotation.quality_score = quality_score
     annotation.status = AnnotationStatus.QA_REVIEW
     await db.commit()
-    logger.info("svc_labels_committed", trace_id=trace_id, annotation_id=str(annotation_id), new_status=AnnotationStatus.QA_REVIEW.value)
+    logger.info(
+        "svc_labels_committed",
+        trace_id=trace_id,
+        annotation_id=str(annotation_id),
+        new_status=AnnotationStatus.QA_REVIEW.value,
+    )
 
     await db.refresh(annotation)
 
     return AnnotationResponse(
         id=annotation.id,
-        status=annotation.status.value if hasattr(annotation.status, 'value') else annotation.status,
+        status=annotation.status.value if hasattr(annotation.status, "value") else annotation.status,
         iaa_score=annotation.iaa_score,
         quality_score=annotation.quality_score,
         annotator_id=annotation.annotator_id,
@@ -160,11 +171,7 @@ async def submit_review(
     category: str = "object_detection",
 ) -> AnnotationResponse:
     # FOR UPDATE to prevent concurrent review races (B1)
-    result = await db.execute(
-        select(Annotation)
-        .where(Annotation.id == annotation_id)
-        .with_for_update()
-    )
+    result = await db.execute(select(Annotation).where(Annotation.id == annotation_id).with_for_update())
     annotation = result.scalar_one_or_none()
     if annotation is None:
         raise ValueError("Annotation not found")
@@ -179,9 +186,7 @@ async def submit_review(
 
     # Self-assignment protection: reviewer cannot review own annotation (B2)
     if annotation.annotator_id == reviewer_id:
-        raise ValueError(
-            "QA reviewer cannot review their own annotation"
-        )
+        raise ValueError("QA reviewer cannot review their own annotation")
 
     annotation.qa_labels = review_labels
     annotation.qa_reviewer_id = reviewer_id
@@ -195,7 +200,7 @@ async def submit_review(
     annotation.iaa_score = iaa_score
     annotation.review_completed_at = datetime.now(UTC)
 
-    if iaa_score >= 0.96:
+    if iaa_score >= float(settings.ANNOTATION_TARGET_IAA):
         annotation.status = AnnotationStatus.CERTIFIED
         annotation.is_certified = True
     else:
@@ -206,7 +211,7 @@ async def submit_review(
 
     return AnnotationResponse(
         id=annotation.id,
-        status=annotation.status.value if hasattr(annotation.status, 'value') else annotation.status,
+        status=annotation.status.value if hasattr(annotation.status, "value") else annotation.status,
         iaa_score=annotation.iaa_score,
         quality_score=annotation.quality_score,
         annotator_id=annotation.annotator_id,
@@ -291,8 +296,10 @@ def _cohens_kappa(labels_a: dict, labels_b: dict) -> float:
         categories_a[va] = categories_a.get(va, 0) + 1
         categories_b[vb] = categories_b.get(vb, 0) + 1
 
-    pe = sum((categories_a.get(c, 0) / n) * (categories_b.get(c, 0) / n)
-             for c in set(categories_a.keys()) | set(categories_b.keys()))
+    pe = sum(
+        (categories_a.get(c, 0) / n) * (categories_b.get(c, 0) / n)
+        for c in set(categories_a.keys()) | set(categories_b.keys())
+    )
 
     if pe == 1.0:
         return 1.0
@@ -333,18 +340,21 @@ def _iou_agreement(labels_a: dict, labels_b: dict) -> float:
     if not bboxes_a or not bboxes_b:
         return 0.0
 
-    # Compute mean IoU across matched boxes
-    total_iou = 0.0
-    matched = 0
-    for ba in bboxes_a:
-        best_iou = 0.0
-        for bb in bboxes_b:
-            iou = _compute_iou(ba, bb)
-            best_iou = max(best_iou, iou)
-        total_iou += best_iou
-        matched += 1
+    # Symmetric IoU: average of best-match in both directions (A→B and B→A)
+    # so disagreement on object count is penalized symmetrically (M12).
+    def _mean_best_match(src: list[list[float]], dst: list[list[float]]) -> float:
+        total_iou = 0.0
+        for ba in src:
+            best_iou = 0.0
+            for bb in dst:
+                iou = _compute_iou(ba, bb)
+                best_iou = max(best_iou, iou)
+            total_iou += best_iou
+        return total_iou / len(src)
 
-    return round(total_iou / max(matched, 1), 4)
+    forward = _mean_best_match(bboxes_a, bboxes_b)
+    backward = _mean_best_match(bboxes_b, bboxes_a)
+    return round((forward + backward) / 2.0, 4)
 
 
 def _compute_iou(box_a: list[float], box_b: list[float]) -> float:
@@ -377,17 +387,17 @@ def _compute_iou(box_a: list[float], box_b: list[float]) -> float:
     return inter_area / union_area
 
 
-async def get_pending_jobs(
-    db: AsyncSession, annotator_id: UUID
-) -> list[dict]:
+async def get_pending_jobs(db: AsyncSession, annotator_id: UUID) -> list[dict]:
     result = await db.execute(
         select(Annotation)
         .where(
             Annotation.annotator_id == annotator_id,
-            Annotation.status.in_([
-                AnnotationStatus.HUMAN_REVIEW,
-                AnnotationStatus.AUTO_LABELED,
-            ]),
+            Annotation.status.in_(
+                [
+                    AnnotationStatus.HUMAN_REVIEW,
+                    AnnotationStatus.AUTO_LABELED,
+                ]
+            ),
         )
         .order_by(Annotation.created_at.asc())
     )
@@ -406,9 +416,7 @@ async def get_pending_jobs(
 
 
 async def get_job_detail(db: AsyncSession, annotation_id: UUID) -> dict | None:
-    result = await db.execute(
-        select(Annotation).where(Annotation.id == annotation_id)
-    )
+    result = await db.execute(select(Annotation).where(Annotation.id == annotation_id))
     annotation = result.scalar_one_or_none()
     if annotation is None:
         return None
@@ -430,15 +438,9 @@ async def get_job_detail(db: AsyncSession, annotation_id: UUID) -> dict | None:
     }
 
 
-async def reassign_rejected(
-    db: AsyncSession, annotation_id: UUID
-) -> AnnotationResponse:
+async def reassign_rejected(db: AsyncSession, annotation_id: UUID) -> AnnotationResponse:
     """Reset a REJECTED annotation back to PENDING for rework (H9)."""
-    result = await db.execute(
-        select(Annotation)
-        .where(Annotation.id == annotation_id)
-        .with_for_update()
-    )
+    result = await db.execute(select(Annotation).where(Annotation.id == annotation_id).with_for_update())
     annotation = result.scalar_one_or_none()
     if annotation is None:
         raise ValueError("Annotation not found")
@@ -446,8 +448,7 @@ async def reassign_rejected(
     current_status = annotation.status.value if hasattr(annotation.status, "value") else annotation.status
     if current_status != AnnotationStatus.REJECTED.value:
         raise ValueError(
-            f"Cannot reassign annotation in {current_status} status; "
-            f"expected {AnnotationStatus.REJECTED.value}"
+            f"Cannot reassign annotation in {current_status} status; expected {AnnotationStatus.REJECTED.value}"
         )
 
     annotation.status = AnnotationStatus.PENDING
@@ -464,7 +465,7 @@ async def reassign_rejected(
 
     return AnnotationResponse(
         id=annotation.id,
-        status=annotation.status.value if hasattr(annotation.status, 'value') else annotation.status,
+        status=annotation.status.value if hasattr(annotation.status, "value") else annotation.status,
         iaa_score=annotation.iaa_score,
         quality_score=annotation.quality_score,
         annotator_id=annotation.annotator_id,

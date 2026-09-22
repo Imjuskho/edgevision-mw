@@ -143,9 +143,9 @@ export function classifyAgriByColor(
   const yellowDensity = yellowPixels / sampledPixels;
   const darkDensity = darkPixels / sampledPixels;
 
-  let cropType = "unknown";
-  let healthStatus = "healthy";
-  let confidence = 0.5;
+  let cropType: string;
+  let healthStatus: string;
+  let confidence: number;
 
   if (greenDensity > 0.35) {
     cropType = "vegetables";

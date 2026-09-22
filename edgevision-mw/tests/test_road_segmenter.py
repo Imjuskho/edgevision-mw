@@ -1,4 +1,5 @@
 """Tests for road segmenter model path resolution and inference geometry."""
+
 from __future__ import annotations
 
 from pathlib import Path

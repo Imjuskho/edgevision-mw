@@ -42,6 +42,7 @@ celery_app.autodiscover_tasks(["app.workers"])
 # Explicitly import studio tasks to ensure they're registered
 # (autodiscover may not catch all patterns)
 import app.workers.tasks  # noqa: E402, F401
+import app.tasks.studio_tasks  # noqa: E402, F401
 
 
 @task_success.connect

@@ -8,9 +8,11 @@ from uuid import uuid4
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.logging import get_logger
 from app.models.annotation import Annotation
 from app.models.consent import ConsentLedger
-from app.models.enums import AnnotationStatus, ConsentStatus, ExportStatus
+from app.models.dataset import DatasetSubjectMembership
+from app.models.enums import AnnotationStatus, ConsentStatus, DatasetStatus, ExportStatus
 from app.models.subject import SubjectAnnotation
 from app.schemas.compliance import (
     ComplianceAudit,
@@ -18,6 +20,8 @@ from app.schemas.compliance import (
     ConsentVerification,
     PIICheckResult,
 )
+
+logger = get_logger("edgevision.compliance")
 
 
 async def record_consent(db: AsyncSession, consent_data: dict) -> ConsentResponse:
@@ -66,10 +70,12 @@ async def withdraw_consent(db: AsyncSession, subject_hash: str) -> dict:
 
     # 1. Lock active consents with FOR UPDATE to prevent concurrent duplicate withdrawals (M3)
     result = await db.execute(
-        select(ConsentLedger).where(
+        select(ConsentLedger)
+        .where(
             ConsentLedger.subject_hash == subject_hash,
             ConsentLedger.status == ConsentStatus.ACTIVE,
-        ).with_for_update()
+        )
+        .with_for_update()
     )
     active_consents = result.scalars().all()
     affected_count = 0
@@ -94,6 +100,7 @@ async def withdraw_consent(db: AsyncSession, subject_hash: str) -> dict:
     await db.commit()
 
     # 2. Find annotations containing this subject via junction table (O(1) lookup)
+    from app.models.dataset import Dataset
     from app.models.export import Export
 
     sa_result = await db.execute(
@@ -108,11 +115,13 @@ async def withdraw_consent(db: AsyncSession, subject_hash: str) -> dict:
         ann_result = await db.execute(
             select(Annotation).where(
                 Annotation.id.in_(annotation_ids),
-                Annotation.status.in_([
-                    AnnotationStatus.CERTIFIED,
-                    AnnotationStatus.HUMAN_REVIEW,
-                    AnnotationStatus.AUTO_LABELED,
-                ]),
+                Annotation.status.in_(
+                    [
+                        AnnotationStatus.CERTIFIED,
+                        AnnotationStatus.HUMAN_REVIEW,
+                        AnnotationStatus.AUTO_LABELED,
+                    ]
+                ),
             )
         )
         for ann in ann_result.scalars().all():
@@ -144,30 +153,65 @@ async def withdraw_consent(db: AsyncSession, subject_hash: str) -> dict:
 
                 # Refund escrowed credit for blocked exports
                 from app.services.billing import refund_escrow
+
                 await refund_escrow(db, exp.id, reason="consent_withdrawn")
 
     # 4. Schedule hard-delete task (24h ETA for data cleanup)
+    deletion_failed = False
     try:
         from app.workers.tasks import hard_delete_user_data_task
+
         hard_delete_user_data_task.apply_async(
             args=[subject_hash],
             countdown=86400,  # 24 hours
         )
-    except Exception:
-        pass
+    except Exception as e:
+        logger.error("Failed to schedule hard-delete for user %s: %s", subject_hash, e)
+        deletion_failed = True
 
-    # 5. Log the withdrawal to audit
+    # 6. G1: Query DatasetSubjectMembership for affected datasets and log impact
+    ds_membership_result = await db.execute(
+        select(DatasetSubjectMembership).where(
+            DatasetSubjectMembership.subject_hash == subject_hash,
+        )
+    )
+    affected_memberships = ds_membership_result.scalars().all()
+
+    impact_datasets = []
+    for mem in affected_memberships:
+        # Look up current dataset status
+        ds_result = await db.execute(
+            select(Dataset).where(Dataset.dataset_id == mem.dataset_id)
+        )
+        ds = ds_result.scalar_one_or_none()
+        if ds is None:
+            continue
+        ds_status = ds.status.value if hasattr(ds.status, "value") else ds.status
+        if ds_status in (DatasetStatus.FOR_SALE.value, DatasetStatus.SOLD.value):
+            impact_datasets.append({
+                "dataset_id": mem.dataset_id,
+                "dataset_name": ds.name,
+                "status": ds_status,
+                "subject_annotation_count": mem.annotation_count,
+            })
+
+    # 7. Log the withdrawal to audit
     from app.models.audit import AuditLog
+
+    audit_details = {
+        "subject_hash": subject_hash,
+        "consents_withdrawn": affected_count,
+        "annotations_blocked": blocked_annotations,
+        "exports_blocked": blocked_exports,
+    }
+    if impact_datasets:
+        audit_details["consent_impact_events"] = impact_datasets
+
     audit = AuditLog(
         event_type="CONSENT_WITHDRAWN",
-        severity="WARNING",
+        severity="WARNING" if not impact_datasets else "CRITICAL",
         resource_type="consent_ledger",
-        details={
-            "subject_hash": subject_hash,
-            "consents_withdrawn": affected_count,
-            "annotations_blocked": blocked_annotations,
-            "exports_blocked": blocked_exports,
-        },
+        details=audit_details,
         actor_type="SYSTEM",
     )
     db.add(audit)
@@ -180,21 +224,23 @@ async def withdraw_consent(db: AsyncSession, subject_hash: str) -> dict:
         "annotations_blocked": blocked_annotations,
         "exports_blocked": blocked_exports,
         "withdrawn_at": now.isoformat(),
+        "deletion_failed": deletion_failed,
         "message": f"Withdrew {affected_count} consents, blocked {blocked_annotations} annotations, blocked {blocked_exports} exports",
     }
 
 
-async def verify_consent(
-    db: AsyncSession, subject_hash: str, purpose: str
-) -> ConsentVerification:
+async def verify_consent(db: AsyncSession, subject_hash: str, purpose: str) -> ConsentVerification:
     now = datetime.now(UTC)
 
     # Check if there's a withdrawal record (most recent wins)
     withdrawal_check = await db.execute(
-        select(ConsentLedger).where(
+        select(ConsentLedger)
+        .where(
             ConsentLedger.subject_hash == subject_hash,
             ConsentLedger.status == ConsentStatus.WITHDRAWN,
-        ).order_by(ConsentLedger.created_at.desc()).limit(1)
+        )
+        .order_by(ConsentLedger.created_at.desc())
+        .limit(1)
     )
     withdrawal = withdrawal_check.scalar_one_or_none()
 
@@ -214,7 +260,7 @@ async def verify_consent(
         if purpose in consent.purposes and consent.expiry > now:
             return ConsentVerification(
                 valid=True,
-                status=consent.status.value if hasattr(consent.status, 'value') else consent.status,
+                status=consent.status.value if hasattr(consent.status, "value") else consent.status,
                 purposes=consent.purposes,
                 expiry=consent.expiry,
                 affected_images=0,
@@ -232,29 +278,21 @@ async def verify_consent(
 async def run_daily_audit(db: AsyncSession) -> ComplianceAudit:
     now = datetime.now(UTC)
 
-    total_subjects_result = await db.execute(
-        select(func.count(func.distinct(ConsentLedger.subject_hash)))
-    )
+    total_subjects_result = await db.execute(select(func.count(func.distinct(ConsentLedger.subject_hash))))
     total_subjects = total_subjects_result.scalar() or 0
 
     active_result = await db.execute(
-        select(func.count()).select_from(ConsentLedger).where(
-            ConsentLedger.status == ConsentStatus.ACTIVE
-        )
+        select(func.count()).select_from(ConsentLedger).where(ConsentLedger.status == ConsentStatus.ACTIVE)
     )
     active_consents = active_result.scalar() or 0
 
     withdrawn_result = await db.execute(
-        select(func.count()).select_from(ConsentLedger).where(
-            ConsentLedger.status == ConsentStatus.WITHDRAWN
-        )
+        select(func.count()).select_from(ConsentLedger).where(ConsentLedger.status == ConsentStatus.WITHDRAWN)
     )
     withdrawn = withdrawn_result.scalar() or 0
 
     expired_result = await db.execute(
-        select(func.count()).select_from(ConsentLedger).where(
-            ConsentLedger.status == ConsentStatus.EXPIRED
-        )
+        select(func.count()).select_from(ConsentLedger).where(ConsentLedger.status == ConsentStatus.EXPIRED)
     )
     expired = expired_result.scalar() or 0
 
@@ -278,9 +316,7 @@ async def run_pii_check(db: AsyncSession, dataset_id: str) -> PIICheckResult:
     _check_pii_model()
 
     # Look up the Dataset UUID from the dataset_id string (e.g. "ds-abc123")
-    ds_result = await db.execute(
-        select(Dataset).where(Dataset.dataset_id == dataset_id)
-    )
+    ds_result = await db.execute(select(Dataset).where(Dataset.dataset_id == dataset_id))
     dataset = ds_result.scalar_one_or_none()
 
     if dataset is None:
@@ -293,9 +329,11 @@ async def run_pii_check(db: AsyncSession, dataset_id: str) -> PIICheckResult:
         )
 
     result = await db.execute(
-        select(Annotation).where(
+        select(Annotation)
+        .where(
             Annotation.dataset_id == dataset.id,
-        ).limit(100)
+        )
+        .limit(100)
     )
     annotations = result.scalars().all()
 
@@ -311,24 +349,85 @@ async def run_pii_check(db: AsyncSession, dataset_id: str) -> PIICheckResult:
             if faces:
                 pii_detected += 1
                 detected_types["face"] = detected_types.get("face", 0) + len(faces)
-                violation_details.append({
-                    "annotation_id": str(ann.id),
-                    "type": "face",
-                    "count": len(faces),
-                })
+                violation_details.append(
+                    {
+                        "annotation_id": str(ann.id),
+                        "type": "face",
+                        "count": len(faces),
+                    }
+                )
 
             plates = labels.get("license_plates", [])
             if plates:
                 pii_detected += 1
                 detected_types["license_plate"] = detected_types.get("license_plate", 0) + len(plates)
-                violation_details.append({
-                    "annotation_id": str(ann.id),
-                    "type": "license_plate",
-                    "count": len(plates),
-                })
+                violation_details.append(
+                    {
+                        "annotation_id": str(ann.id),
+                        "type": "license_plate",
+                        "count": len(plates),
+                    }
+                )
+
+    # Vision-based spot check on stored imagery (up to 20 frames).
+    vision_scan_failed = False
+    vision_failed_count = 0
+    vision_total_count = 0
+    try:
+        from app.ai.pii_redaction import scan_image_bytes
+        from app.core.config import settings
+        from app.core.dependencies import get_minio_client_sync
+
+        mc = get_minio_client_sync()
+        if mc is not None:
+            for ann in annotations[:20]:
+                if not ann.image_path:
+                    continue
+                vision_total_count += 1
+                try:
+                    resp = mc.get_object(settings.MINIO_BUCKET, ann.image_path)
+                    scan = scan_image_bytes(resp.read())
+                except Exception as e:
+                    logger.error("PII vision scan failed for annotation %s: %s", ann.id, e)
+                    vision_failed_count += 1
+                    vision_scan_failed = True
+                    continue
+                if scan.faces == -1 or scan.plates == -1:
+                    vision_scan_failed = True
+                if scan.faces and scan.faces > 0:
+                    pii_detected += 1
+                    detected_types["face"] = detected_types.get("face", 0) + scan.faces
+                    violation_details.append(
+                        {
+                            "annotation_id": str(ann.id),
+                            "type": "face",
+                            "count": scan.faces,
+                            "source": "vision",
+                        }
+                    )
+                if scan.plates and scan.plates > 0:
+                    pii_detected += 1
+                    detected_types["license_plate"] = detected_types.get("license_plate", 0) + scan.plates
+                    violation_details.append(
+                        {
+                            "annotation_id": str(ann.id),
+                            "type": "license_plate",
+                            "count": scan.plates,
+                            "source": "vision",
+                        }
+                    )
+            if vision_scan_failed:
+                logger.warning(
+                    "PII audit completed with %d scan failures out of %d annotations",
+                    vision_failed_count,
+                    vision_total_count,
+                )
+    except Exception as e:
+        logger.error("PII vision scan failed: %s", e)
 
     if pii_detected > 0:
         from app.models.audit import AuditLog
+
         audit = AuditLog(
             event_type="PII_DETECTED",
             severity="WARNING",
@@ -363,6 +462,7 @@ def _check_pii_model() -> bool:
         return _pii_model_available
     try:
         import onnxruntime  # noqa: F401
+
         _pii_model_available = True
     except ImportError:
         _pii_model_available = False
@@ -406,6 +506,7 @@ async def expire_consents(db: AsyncSession) -> int:
 
     if count > 0:
         from app.models.audit import AuditLog
+
         audit = AuditLog(
             event_type="CONSENT_EXPIRED",
             severity="INFO",
@@ -430,14 +531,18 @@ async def get_consent_audit(db: AsyncSession) -> dict:
     thirty_days_ago = now - timedelta(days=30)
 
     total_active = await db.execute(
-        select(func.count()).select_from(ConsentLedger).where(
+        select(func.count())
+        .select_from(ConsentLedger)
+        .where(
             ConsentLedger.status == ConsentStatus.ACTIVE,
         )
     )
     total_active_consents = total_active.scalar() or 0
 
     withdrawn_last_30 = await db.execute(
-        select(func.count()).select_from(ConsentLedger).where(
+        select(func.count())
+        .select_from(ConsentLedger)
+        .where(
             ConsentLedger.status == ConsentStatus.WITHDRAWN,
             ConsentLedger.withdrawn_at >= thirty_days_ago,
         )
@@ -445,7 +550,9 @@ async def get_consent_audit(db: AsyncSession) -> dict:
     withdrawn_last_30_days = withdrawn_last_30.scalar() or 0
 
     expired_last_30 = await db.execute(
-        select(func.count()).select_from(ConsentLedger).where(
+        select(func.count())
+        .select_from(ConsentLedger)
+        .where(
             ConsentLedger.status == ConsentStatus.EXPIRED,
             ConsentLedger.created_at >= thirty_days_ago,
         )
@@ -453,10 +560,12 @@ async def get_consent_audit(db: AsyncSession) -> dict:
     expired_last_30_days = expired_last_30.scalar() or 0
 
     pending_result = await db.execute(
-        select(ConsentLedger).where(
+        select(ConsentLedger)
+        .where(
             ConsentLedger.status == ConsentStatus.WITHDRAWN,
             ConsentLedger.hard_deleted_at.is_(None),
-        ).order_by(ConsentLedger.withdrawn_at.desc())
+        )
+        .order_by(ConsentLedger.withdrawn_at.desc())
     )
     pending_consents = pending_result.scalars().all()
     pending_hard_deletions = len(pending_consents)
@@ -464,11 +573,13 @@ async def get_consent_audit(db: AsyncSession) -> dict:
     pending_deletion_details = []
     for c in pending_consents:
         if c.withdrawn_at:
-            pending_deletion_details.append({
-                "subject_hash": c.subject_hash,
-                "withdrawn_at": c.withdrawn_at,
-                "scheduled_hard_delete": c.withdrawn_at + timedelta(hours=24),
-            })
+            pending_deletion_details.append(
+                {
+                    "subject_hash": c.subject_hash,
+                    "withdrawn_at": c.withdrawn_at,
+                    "scheduled_hard_delete": c.withdrawn_at + timedelta(hours=24),
+                }
+            )
 
     return {
         "total_active_consents": total_active_consents,
@@ -477,3 +588,35 @@ async def get_consent_audit(db: AsyncSession) -> dict:
         "pending_hard_deletions": pending_hard_deletions,
         "pending_deletion_details": pending_deletion_details,
     }
+
+
+async def get_subject_withdrawal_impact(
+    db: AsyncSession, subject_hash: str
+) -> list[dict]:
+    """G1: Return all datasets affected by a subject's consent withdrawal."""
+    from app.models.dataset import Dataset, DatasetSubjectMembership
+
+    result = await db.execute(
+        select(DatasetSubjectMembership).where(
+            DatasetSubjectMembership.subject_hash == subject_hash,
+        )
+    )
+    memberships = result.scalars().all()
+
+    affected = []
+    for mem in memberships:
+        ds_result = await db.execute(
+            select(Dataset).where(Dataset.dataset_id == mem.dataset_id)
+        )
+        ds = ds_result.scalar_one_or_none()
+        if ds is None:
+            continue
+        ds_status = ds.status.value if hasattr(ds.status, "value") else ds.status
+        affected.append({
+            "dataset_id": mem.dataset_id,
+            "dataset_name": ds.name,
+            "status": ds_status,
+            "subject_annotation_count": mem.annotation_count,
+        })
+
+    return affected

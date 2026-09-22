@@ -13,6 +13,8 @@ from app.core.exceptions import register_exception_handlers
 from app.core.logging import get_logger, request_id_var, setup_logging
 from app.core.sentry import init_sentry
 
+logger = get_logger("edgevision.app")
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -24,6 +26,7 @@ async def lifespan(app: FastAPI):
 
     try:
         from app.core.dependencies import get_minio_client
+
         minio_client = await get_minio_client()
         bucket = settings.MINIO_BUCKET
         if not minio_client.bucket_exists(bucket):
@@ -54,26 +57,42 @@ app = FastAPI(
     openapi_tags=[
         {"name": "Fleet", "description": "Edge device registration, heartbeat, telemetry, and commands."},
         {"name": "Ingestion", "description": "Batch upload, validation, and processing of captured data."},
-        {"name": "Annotation", "description": "Job assignment, label submission, QA review, and inter-annotator agreement."},
+        {
+            "name": "Annotation",
+            "description": "Job assignment, label submission, QA review, and inter-annotator agreement.",
+        },
         {"name": "Catalog", "description": "Dataset search, build, manifest generation, and pricing quotes."},
         {"name": "Compliance", "description": "Consent recording, withdrawal, verification, PII detection, and audit."},
         {"name": "Billing", "description": "Dataset export, payment escrow, delivery, and revenue breakdown."},
         {"name": "Auth", "description": "User registration, login, JWT tokens, and API key management."},
         {"name": "Studio", "description": "AI-first annotation studio — sessions, images, annotations, and sync."},
-        {"name": "Studio Intelligence", "description": "Dataset health, class distribution, dedup analysis, and export build."},
-        {"name": "Model Registry", "description": "Deploy trained model artifacts and manage which one is active per model type."},
+        {
+            "name": "Studio Intelligence",
+            "description": "Dataset health, class distribution, dedup analysis, and export build.",
+        },
+        {
+            "name": "Model Registry",
+            "description": "Deploy trained model artifacts and manage which one is active per model type.",
+        },
         {"name": "Metrics", "description": "Prometheus metrics endpoint for monitoring and alerting."},
-        {"name": "Agriculture Analysis", "description": "Crop type and health instance segmentation and field condition analysis."},
+        {
+            "name": "Agriculture Analysis",
+            "description": "Crop type and health instance segmentation and field condition analysis.",
+        },
     ],
 )
 
 register_exception_handlers(app)
 
-_cors_origins = [
-    o.strip()
-    for o in settings.CORS_ORIGINS.split(",")
-    if o.strip()
-] or ["http://localhost:3000", "http://localhost:8000"]
+_configured_origins = [o.strip() for o in settings.CORS_ORIGINS.split(",") if o.strip()]
+if not _configured_origins:
+    if settings.ENVIRONMENT == "production":
+        logger.warning("cors_origins_unset_in_production")
+        _cors_origins = []
+    else:
+        _cors_origins = ["http://localhost:3000", "http://localhost:8000"]
+else:
+    _cors_origins = _configured_origins
 
 app.add_middleware(
     CORSMiddleware,
@@ -100,9 +119,11 @@ async def request_middleware(request: Request, call_next):
         import uuid as _uuid
 
         from app.core.tenant import set_current_tenant_id
+
         auth_header = request.headers.get("Authorization", "")
         if auth_header.startswith("Bearer "):
             from app.core.security import decode_access_token
+
             token = auth_header.removeprefix("Bearer ")
             payload = decode_access_token(token)
             sub = payload.get("sub")
@@ -117,6 +138,7 @@ async def request_middleware(request: Request, call_next):
 
     try:
         from app.api.metrics import http_request_duration_seconds, http_requests_total
+
         endpoint = request.url.path
         method = request.method
         status = str(response.status_code)
@@ -152,20 +174,28 @@ async def rate_limit_middleware(request: Request, call_next):
 from app.api import (  # noqa: E402
     admin_router,
     agri_router,
+    alerts_router,
     analytics_router,
     annotation_router,
     annotations_live_router,
     assignment_router,
+    b2b_router,
     billing_router,
+    buyer_dashboard_router,
     catalog_router,
     clip_router,
     compliance_router,
+    flywheel_router,
+    evaluation_router,
     fleet_router,
+    fl_router,
+    frontier_router,
     health_router,
     image_upload_router,
     ingestion_router,
     metrics_router,
     model_registry_router,
+    operator_router,
     prelabel_router,
     review_router,
     road_router,
@@ -174,6 +204,8 @@ from app.api import (  # noqa: E402
     studio_intelligence_router,
     studio_router,
     studio_sync_router,
+    subject_portal_router,
+    synthetic_router,
     training_router,
     ws_annotation_router,
 )
@@ -188,16 +220,18 @@ app.include_router(fleet_router, prefix=settings.API_V1_PREFIX)
 app.include_router(ingestion_router, prefix=settings.API_V1_PREFIX)
 app.include_router(annotation_router, prefix=settings.API_V1_PREFIX)
 app.include_router(assignment_router, prefix=settings.API_V1_PREFIX)
+app.include_router(b2b_router)
 app.include_router(catalog_router, prefix=settings.API_V1_PREFIX)
 app.include_router(clip_router, prefix=settings.API_V1_PREFIX)
 app.include_router(compliance_router, prefix=settings.API_V1_PREFIX)
+app.include_router(evaluation_router, prefix=settings.API_V1_PREFIX)
 app.include_router(billing_router, prefix=settings.API_V1_PREFIX)
 app.include_router(image_upload_router, prefix=settings.API_V1_PREFIX)
 app.include_router(serve_router, prefix=settings.API_V1_PREFIX)
-app.include_router(ingestion_router, prefix=settings.API_V1_PREFIX)
 app.include_router(prelabel_router, prefix=settings.API_V1_PREFIX)
 app.include_router(review_router, prefix=settings.API_V1_PREFIX)
 app.include_router(agri_router, prefix=settings.API_V1_PREFIX)
+app.include_router(alerts_router, prefix=settings.API_V1_PREFIX)
 app.include_router(road_router, prefix=settings.API_V1_PREFIX)
 app.include_router(studio_router, prefix=settings.API_V1_PREFIX)
 app.include_router(studio_ai_router, prefix=settings.API_V1_PREFIX)
@@ -207,6 +241,13 @@ app.include_router(training_router, prefix=settings.API_V1_PREFIX)
 app.include_router(annotations_live_router, prefix=settings.API_V1_PREFIX)
 app.include_router(ws_annotation_router)
 app.include_router(model_registry_router, prefix=settings.API_V1_PREFIX)
+app.include_router(operator_router, prefix=settings.API_V1_PREFIX)
+app.include_router(frontier_router, prefix=settings.API_V1_PREFIX)
+app.include_router(fl_router, prefix=settings.API_V1_PREFIX)
+app.include_router(synthetic_router, prefix=settings.API_V1_PREFIX)
+app.include_router(flywheel_router, prefix=settings.API_V1_PREFIX)
+app.include_router(buyer_dashboard_router, prefix=settings.API_V1_PREFIX)
+app.include_router(subject_portal_router, prefix=settings.API_V1_PREFIX)
 
 
 @app.get("/health")
@@ -218,6 +259,7 @@ async def health_check():
         from sqlalchemy import text
 
         from app.core.database import async_session
+
         async with async_session() as session:
             await session.execute(text("SELECT 1"))
         checks["postgres"] = True
@@ -227,6 +269,7 @@ async def health_check():
     # Redis
     try:
         from app.core.dependencies import _redis_client
+
         if _redis_client is not None:
             await _redis_client.ping()
             checks["redis"] = True
@@ -236,6 +279,7 @@ async def health_check():
     # MinIO
     try:
         from app.core.dependencies import _minio_client
+
         if _minio_client is not None:
             _minio_client.bucket_exists(settings.MINIO_BUCKET)
             checks["minio"] = True

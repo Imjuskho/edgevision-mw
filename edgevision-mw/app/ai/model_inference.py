@@ -36,7 +36,7 @@ def get_lkg_status() -> dict[str, str]:
 def _resolve_object_key(artifact_path: str) -> str:
     prefix = f"{settings.MINIO_ENDPOINT}/{settings.MINIO_BUCKET}/"
     if artifact_path.startswith(prefix):
-        return artifact_path[len(prefix):]
+        return artifact_path[len(prefix) :]
     return artifact_path.lstrip("/")
 
 
@@ -141,9 +141,7 @@ class ONNXEngine(BaseEngine):
         return self._session is not None
 
     def detect(self, image, conf_threshold: float = 0.35) -> list[Detection]:
-        return self._track_inference(
-            "detect", self._detect_impl, image, conf_threshold
-        )
+        return self._track_inference("detect", self._detect_impl, image, conf_threshold)
 
     def _detect_impl(self, image, conf_threshold: float = 0.35) -> list[Detection]:
         if self._session is None:
@@ -159,7 +157,7 @@ class ONNXEngine(BaseEngine):
             canvas = np.full((self._input_height, self._input_width, 3), 114, dtype=np.uint8)
             dx = (self._input_width - nw) // 2
             dy = (self._input_height - nh) // 2
-            canvas[dy:dy + nh, dx:dx + nw] = resized
+            canvas[dy : dy + nh, dx : dx + nw] = resized
             blob = np.transpose(canvas.astype(np.float32) / 255.0, (2, 0, 1))[np.newaxis]
 
             outputs = self._session.run(self._output_names, {self._input_name: blob})
@@ -177,14 +175,16 @@ class ONNXEngine(BaseEngine):
                 y1 = (cy - h / 2 - dy) / scale
                 x2 = (cx + w / 2 - dx) / scale
                 y2 = (cy + h / 2 - dy) / scale
-                detections.append(Detection(
-                    class_name=f"class_{cls_id}",
-                    confidence=max_score,
-                    x1=max(0, x1),
-                    y1=max(0, y1),
-                    x2=min(orig_w, x2),
-                    y2=min(orig_h, y2),
-                ))
+                detections.append(
+                    Detection(
+                        class_name=f"class_{cls_id}",
+                        confidence=max_score,
+                        x1=max(0, x1),
+                        y1=max(0, y1),
+                        x2=min(orig_w, x2),
+                        y2=min(orig_h, y2),
+                    )
+                )
             return detections
         except Exception as exc:
             logger.error("onnx_engine_detect_failed", error=str(exc))
@@ -220,9 +220,7 @@ class TrainedModelEngine(BaseEngine):
         return self._model is not None
 
     def detect(self, image, conf_threshold: float = 0.35) -> list[Detection]:
-        return self._track_inference(
-            "detect", self._detect_impl, image, conf_threshold
-        )
+        return self._track_inference("detect", self._detect_impl, image, conf_threshold)
 
     def _detect_impl(self, image, conf_threshold: float = 0.35) -> list[Detection]:
         if self._model is None:

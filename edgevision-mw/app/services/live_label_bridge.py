@@ -1,4 +1,5 @@
 """Convert live WebSocket detections into studio ``human_labels`` boxes."""
+
 from __future__ import annotations
 
 
@@ -19,12 +20,7 @@ def live_detections_to_studio_boxes(
         if not isinstance(obj, dict):
             continue
 
-        label = (
-            obj.get("taxonomy_label")
-            or obj.get("class_name")
-            or obj.get("label")
-            or "object"
-        )
+        label = obj.get("taxonomy_label") or obj.get("class_name") or obj.get("label") or "object"
         confidence = float(obj.get("confidence", 1.0))
 
         polygon: list[list[float]] | None = None
@@ -36,10 +32,7 @@ def live_detections_to_studio_boxes(
             and isinstance(mask[0], (list, tuple))
             and len(mask[0]) >= 2
         ):
-            polygon = [
-                [max(0.0, min(1.0, float(p[0]))), max(0.0, min(1.0, float(p[1])))]
-                for p in mask[:32]
-            ]
+            polygon = [[max(0.0, min(1.0, float(p[0]))), max(0.0, min(1.0, float(p[1])))] for p in mask[:32]]
 
         bbox = obj.get("bbox")
         if polygon:

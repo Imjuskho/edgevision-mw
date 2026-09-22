@@ -22,7 +22,10 @@ def _create_token(user):
 
 @pytest.mark.asyncio
 async def test_attach_mask_rle_sets_format_and_metadata(
-    _patch_minio, test_client, db_session, monkeypatch,
+    _patch_minio,
+    test_client,
+    db_session,
+    monkeypatch,
 ):
     pytest.importorskip("pycocotools")
     from tests.test_phase7 import _create_user, _make_png_buffer
@@ -32,9 +35,11 @@ async def test_attach_mask_rle_sets_format_and_metadata(
 
     buf = _make_png_buffer(seed=55)
     mask_polygon = [[0.1, 0.1], [0.4, 0.1], [0.4, 0.4], [0.1, 0.4]]
-    ann_json = json.dumps([
-        {"class_name": "car", "confidence": 0.95, "bbox": [10, 10, 50, 50]},
-    ])
+    ann_json = json.dumps(
+        [
+            {"class_name": "car", "confidence": 0.95, "bbox": [10, 10, 50, 50]},
+        ]
+    )
     masks_json = json.dumps([mask_polygon])
 
     resp = await test_client.post(
@@ -52,9 +57,7 @@ async def test_attach_mask_rle_sets_format_and_metadata(
     data = resp.json()
     assert data.get("has_mask_rle") is True
 
-    result = await db_session.execute(
-        select(Annotation).where(Annotation.id == data["id"])
-    )
+    result = await db_session.execute(select(Annotation).where(Annotation.id == data["id"]))
     record = result.scalar_one()
     objects = record.detected_objects.get("objects", [])
     assert objects[0].get("mask_rle")
@@ -75,9 +78,11 @@ async def test_save_live_annotation_with_bbox_3d(_patch_minio, test_client, db_s
         "yaw": 0.0,
         "limitation": "heuristic_prior_yaw0",
     }
-    ann_json = json.dumps([
-        {"class_name": "car", "confidence": 0.9, "bbox": [10, 10, 50, 50]},
-    ])
+    ann_json = json.dumps(
+        [
+            {"class_name": "car", "confidence": 0.9, "bbox": [10, 10, 50, 50]},
+        ]
+    )
     bbox_3d_json = json.dumps([box3d])
 
     resp = await test_client.post(
@@ -94,9 +99,7 @@ async def test_save_live_annotation_with_bbox_3d(_patch_minio, test_client, db_s
     assert resp.status_code == 201
     data = resp.json()
 
-    result = await db_session.execute(
-        select(Annotation).where(Annotation.id == data["id"])
-    )
+    result = await db_session.execute(select(Annotation).where(Annotation.id == data["id"]))
     record = result.scalar_one()
     objects = record.detected_objects.get("objects", [])
     assert objects[0].get("bbox_3d") == box3d

@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { ChevronLeft, ChevronRight, Hexagon, Sparkles, Square } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, Hexagon, Sparkles, Square } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import ImageSidebar from "../ImageSidebar";
 import { Badge } from "../ui/Badge";
@@ -214,26 +214,34 @@ export function AnnotateWorkspace({
       <div className={`annotate-workspace-body${isLive ? " annotate-workspace-body--live" : ""}`}>
         <div className={`annotate-canvas-wrap${isLive ? " annotate-canvas-wrap--live" : ""}`}>{children}</div>
         <aside className="annotate-inspector" aria-label={t("annotation.inspector")}>
-          {inspector ?? (
-            <>
-              <h3 className="text-h3">{t("annotation.classPalette")}</h3>
-              <p className="text-caption">{t("annotation.shortcutHint")}</p>
-              <div className="annotate-palette-grid">
-                {palette.map((item) => (
-                  <button
-                    key={item.label}
-                    type="button"
-                    className={`annotate-palette-item${selectedLabel === item.label ? " annotate-palette-item--active" : ""}`}
-                    onClick={() => onLabelChange(item.label)}
-                    style={toStyle({ borderColor: item.color })}
-                  >
-                    <Kbd>{item.shortcut}</Kbd>
-                    <span className="annotate-palette-item__name">{item.name}</span>
-                  </button>
-                ))}
-              </div>
-            </>
-          )}
+          <details className="annotate-inspector-details" open={isLive}>
+            <summary className="annotate-inspector-summary">
+              <span>{t("annotation.inspector")}</span>
+              <ChevronDown size={14} aria-hidden />
+            </summary>
+            <div className="annotate-inspector-content">
+              {inspector ?? (
+                <>
+                  <h3 className="text-h3">{t("annotation.classPalette")}</h3>
+                  <p className="text-caption">{t("annotation.shortcutHint")}</p>
+                  <div className="annotate-palette-grid">
+                    {palette.map((item) => (
+                      <button
+                        key={item.label}
+                        type="button"
+                        className={`annotate-palette-item${selectedLabel === item.label ? " annotate-palette-item--active" : ""}`}
+                        onClick={() => onLabelChange(item.label)}
+                        style={toStyle({ borderColor: item.color })}
+                      >
+                        <Kbd>{item.shortcut}</Kbd>
+                        <span className="annotate-palette-item__name">{item.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          </details>
         </aside>
       </div>
       </div>

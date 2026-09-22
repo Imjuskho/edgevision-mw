@@ -7,6 +7,9 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field
 
 
+from app.models.enums import NodeCategory, PIIMode
+
+
 class NodeCommandType(StrEnum):
     REBOOT = "REBOOT"
     UPDATE_SCHEDULE = "UPDATE_SCHEDULE"
@@ -19,18 +22,18 @@ class NodeCommandType(StrEnum):
 class NodeRegister(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    node_id: str = Field(..., description="Unique node identifier assigned at provisioning")
+    node_id: str = Field(..., min_length=3, max_length=128, description="Unique node identifier assigned at provisioning")
     district: str = Field(..., description="Administrative district where the node is deployed")
-    latitude: float = Field(..., description="Deployment latitude in decimal degrees")
-    longitude: float = Field(..., description="Deployment longitude in decimal degrees")
-    category: str = Field(..., description="Node category (e.g. ROAD, MARKET, BORDER)")
+    latitude: float = Field(..., ge=-90.0, le=90.0, description="Deployment latitude in decimal degrees (-90 to 90)")
+    longitude: float = Field(..., ge=-180.0, le=180.0, description="Deployment longitude in decimal degrees (-180 to 180)")
+    category: NodeCategory = Field(..., description="Node category")
     hardware_profile: dict = Field(..., description="Hardware specifications (camera, SoC, storage)")
     network_config: dict = Field(..., description="Network configuration (LTE APN, proxy, etc.)")
     capture_schedule: str = Field(..., description="Cron-style capture schedule expression")
     interest_classes: list[str] = Field(..., description="Object classes the node should detect")
-    pii_mode: str = Field(..., description="PII handling mode (e.g. REDACT_ON_DEVICE, UPLOAD_RAW)")
+    pii_mode: PIIMode = Field(..., description="PII handling mode (REDACT_ON_DEVICE, UPLOAD_RAW, NONE)")
     firmware_version: str = Field(..., description="Current firmware version string")
-    public_key: str = Field(..., description="Base64-encoded Ed25519 public key for authentication")
+    public_key: str = Field(..., min_length=1, description="Base64-encoded Ed25519 public key for authentication")
 
 
 class NodeResponse(BaseModel):
@@ -58,18 +61,18 @@ class NodeResponse(BaseModel):
 class HeartbeatPayload(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    battery_voltage: float = Field(..., description="Current battery voltage in volts")
-    solar_input_watts: float = Field(..., description="Solar panel input power in watts")
-    cpu_temp_celsius: float = Field(..., description="CPU temperature in degrees Celsius")
-    gpu_utilization: float = Field(..., description="GPU utilization percentage (0-100)")
-    storage_used_gb: float = Field(..., description="Storage used in gigabytes")
-    storage_total_gb: float = Field(..., description="Total storage capacity in gigabytes")
-    lte_rssi_dbm: float = Field(..., description="LTE signal strength in dBm")
+    battery_voltage: float = Field(..., ge=0.0, description="Current battery voltage in volts")
+    solar_input_watts: float = Field(..., ge=0.0, description="Solar panel input power in watts")
+    cpu_temp_celsius: float = Field(..., ge=-50.0, le=150.0, description="CPU temperature in degrees Celsius")
+    gpu_utilization: float = Field(..., ge=0.0, le=100.0, description="GPU utilization percentage (0-100)")
+    storage_used_gb: float = Field(..., ge=0.0, description="Storage used in gigabytes")
+    storage_total_gb: float = Field(..., ge=0.0, description="Total storage capacity in gigabytes")
+    lte_rssi_dbm: float = Field(..., ge=-160.0, le=0.0, description="LTE signal strength in dBm")
     camera_status: str = Field(..., description="Camera status (OK, DEGRADED, OFFLINE)")
     clock_drift_ms: float = Field(..., description="Clock drift from NTP server in milliseconds")
-    events_captured: int = Field(default=0, description="Number of events captured since last heartbeat")
-    events_uploaded: int = Field(default=0, description="Number of events uploaded since last heartbeat")
-    bandwidth_mbps: float = Field(default=0.0, description="Current bandwidth in megabits per second")
+    events_captured: int = Field(default=0, ge=0, description="Number of events captured since last heartbeat")
+    events_uploaded: int = Field(default=0, ge=0, description="Number of events uploaded since last heartbeat")
+    bandwidth_mbps: float = Field(default=0.0, ge=0.0, description="Current bandwidth in megabits per second")
     raw_diagnostics: dict = Field(default_factory=dict, description="Additional vendor-specific diagnostics")
 
 

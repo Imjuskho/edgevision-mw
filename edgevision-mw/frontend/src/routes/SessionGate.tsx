@@ -20,18 +20,18 @@ export function SessionGate({ onSessionReady, children }: SessionGateProps) {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
-
-  useEffect(() => {
-    if (!datasetId) {
-      setSessionId(null);
-      setLoading(false);
-      return;
-    }
-
-    let cancelled = false;
+  const [prevDatasetId, setPrevDatasetId] = useState(datasetId);
+  if (datasetId !== prevDatasetId) {
+    setPrevDatasetId(datasetId);
+    setSessionId(null);
     setLoading(true);
     setError(false);
-    setSessionId(null);
+  }
+
+  useEffect(() => {
+    if (!datasetId) return;
+
+    let cancelled = false;
 
     (async () => {
       try {

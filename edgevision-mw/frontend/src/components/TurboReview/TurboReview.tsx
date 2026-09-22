@@ -124,13 +124,9 @@ export const TurboReview: React.FC<TurboReviewProps> = ({
   const [baselineByImage, setBaselineByImage] = useState<Record<string, ObjectRefine[]>>({});
   const [refineMode, setRefineMode] = useState(true);
   const [dragTarget, setDragTarget] = useState<DragTarget | null>(null);
-  const startTime = useRef(Date.now());
+  const startTime = useRef(0);
   const containerRef = useRef<HTMLDivElement>(null);
   const imageContainerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    loadBatch();
-  }, [sessionId]);
 
   const loadBatch = async () => {
     setIsLoading(true);
@@ -174,6 +170,13 @@ export const TurboReview: React.FC<TurboReviewProps> = ({
       setIsLoading(false);
     }
   };
+
+  useEffect(() => {
+    const run = async () => {
+      await loadBatch();
+    };
+    void run();
+  }, [sessionId]);
 
   const filteredImages = useMemo(() => {
     let result = [...images];
@@ -334,6 +337,28 @@ export const TurboReview: React.FC<TurboReviewProps> = ({
     });
   };
 
+  const playSound = (type: 'approve' | 'reject' | 'flag') => {
+    const ctx = new AudioContext();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+
+    if (type === 'approve') {
+      osc.frequency.value = 880;
+      gain.gain.value = 0.05;
+    } else if (type === 'reject') {
+      osc.frequency.value = 220;
+      gain.gain.value = 0.05;
+    } else {
+      osc.frequency.value = 440;
+      gain.gain.value = 0.05;
+    }
+
+    osc.start();
+    osc.stop(ctx.currentTime + 0.1);
+  };
+
   const handleKey = useCallback(
     (key: string, e: KeyboardEvent) => {
       if (!currentImage) return;
@@ -387,28 +412,6 @@ export const TurboReview: React.FC<TurboReviewProps> = ({
   );
 
   useKeyboardShortcuts(handleKey, { capture: true });
-
-  const playSound = (type: 'approve' | 'reject' | 'flag') => {
-    const ctx = new AudioContext();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-
-    if (type === 'approve') {
-      osc.frequency.value = 880;
-      gain.gain.value = 0.05;
-    } else if (type === 'reject') {
-      osc.frequency.value = 220;
-      gain.gain.value = 0.05;
-    } else {
-      osc.frequency.value = 440;
-      gain.gain.value = 0.05;
-    }
-
-    osc.start();
-    osc.stop(ctx.currentTime + 0.1);
-  };
 
   if (isLoading) {
     return <div className="turbo-review loading">{t('turboReview.loading')}</div>;

@@ -124,12 +124,8 @@ async def experiment_summary(
 
     summary: dict[str, dict] = {}
     for experiment_id, variant_id, event_type, count in rows:
-        entry = summary.setdefault(
-            experiment_id, {"variants": {}}
-        )
-        variant = entry["variants"].setdefault(
-            variant_id, {"exposed": 0, "converted": 0, "dismissed": 0}
-        )
+        entry = summary.setdefault(experiment_id, {"variants": {}})
+        variant = entry["variants"].setdefault(variant_id, {"exposed": 0, "converted": 0, "dismissed": 0})
         variant[event_type] = int(count)
 
     return {"experiments": summary}

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { Button } from "./Button";
 import { cn } from "./cn";
@@ -25,17 +25,16 @@ export function Tour({ open, steps, stepIndex, onNext, onPrev, onSkip, onFinish 
   const step = steps[stepIndex];
   const isLast = stepIndex >= steps.length - 1;
 
-  const updateRect = useCallback(() => {
-    if (!step?.target) {
-      setRect(null);
-      return;
-    }
-    const el = document.querySelector(step.target);
-    setRect(el ? el.getBoundingClientRect() : null);
-  }, [step?.target]);
-
   useEffect(() => {
     if (!open) return;
+    const updateRect = () => {
+      if (!step?.target) {
+        setRect(null);
+        return;
+      }
+      const el = document.querySelector(step.target);
+      setRect(el ? el.getBoundingClientRect() : null);
+    };
     updateRect();
     window.addEventListener("resize", updateRect);
     window.addEventListener("scroll", updateRect, true);
@@ -43,7 +42,7 @@ export function Tour({ open, steps, stepIndex, onNext, onPrev, onSkip, onFinish 
       window.removeEventListener("resize", updateRect);
       window.removeEventListener("scroll", updateRect, true);
     };
-  }, [open, updateRect]);
+  }, [open, step?.target]);
 
   if (!open || !step) return null;
 

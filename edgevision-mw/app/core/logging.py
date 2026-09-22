@@ -20,6 +20,7 @@ def _add_timestamp(logger, method_name, event_dict):
 
 def setup_logging() -> None:
     import os
+
     env = os.getenv("ENVIRONMENT", "development")
     if env == "production":
         renderer: structlog.types.Processor = structlog.processors.JSONRenderer()

@@ -3,7 +3,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from app.ai.object_tracker import ByteTrack, iou
+from app.ai.object_tracker import ByteTrack, TrackConfig, iou
 
 
 def _det(bbox, class_name="car", confidence=0.9):
@@ -79,3 +79,34 @@ class TestObjectTracker:
             if track_id is None:
                 track_id = out[0]["track_id"]
             assert out[0]["track_id"] == track_id
+
+    def test_confidence_smoothing_reduces_flicker(self):
+        cfg = TrackConfig(confidence_window=8, alert_on_threshold=0.7, alert_off_threshold=0.5)
+        tracker = ByteTrack(config=cfg)
+        confidences = [0.5, 0.96, 0.55, 0.88, 0.62, 0.91]
+        smoothed_values = []
+        for conf in confidences:
+            out = tracker.update([_det([10, 10, 50, 50], "couch", conf)])
+            smoothed_values.append(out[0]["smoothed_confidence"])
+        assert max(smoothed_values) - min(smoothed_values) < max(confidences) - min(confidences)
+        assert smoothed_values[-1] == sum(confidences) / len(confidences)
+
+    def test_alert_hysteresis(self):
+        cfg = TrackConfig(
+            confidence_window=3,
+            alert_on_threshold=0.7,
+            alert_off_threshold=0.5,
+        )
+        tracker = ByteTrack(config=cfg)
+        tracker.update([_det([10, 10, 50, 50], "person", 0.75)])
+        tracker.update([_det([10, 10, 50, 50], "person", 0.76)])
+        out = tracker.update([_det([10, 10, 50, 50], "person", 0.74)])
+        assert out[0]["alert_active"] is True
+
+        for conf in (0.68, 0.66, 0.64):
+            out = tracker.update([_det([10, 10, 50, 50], "person", conf)])
+        assert out[0]["alert_active"] is True
+
+        for conf in (0.52, 0.48, 0.44):
+            out = tracker.update([_det([10, 10, 50, 50], "person", conf)])
+        assert out[0]["alert_active"] is False

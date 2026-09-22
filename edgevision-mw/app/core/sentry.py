@@ -30,6 +30,7 @@ def init_sentry() -> None:
             if "data" in request and isinstance(request["data"], str):
                 try:
                     import json
+
                     parsed = json.loads(request["data"])
                     for field in ("password", "signature_bytes", "api_key"):
                         if field in parsed:

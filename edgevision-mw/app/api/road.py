@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import asyncio
 import time
+from typing import Any
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -24,6 +26,9 @@ from app.schemas.road import (
     RoadAnnotationUpdate,
     RoadClassesResponse,
     RoadConditionReport,
+    RoadScene,
+    RoadSceneRequest,
+    RoadSceneResponse,
     RoadSegmentationBatchRequest,
     RoadSegmentationBatchResponse,
     RoadSegmentationRequest,
@@ -43,23 +48,27 @@ def _instances_to_schema(instances: list) -> list[InstanceMask]:
     result = []
     for inst in instances:
         if hasattr(inst, "class_id"):
-            result.append(InstanceMask(
-                class_id=inst.class_id,
-                class_name=inst.class_name,
-                confidence=inst.confidence,
-                bbox=inst.bbox,
-                mask_rle=inst.mask_rle,
-                polygon=inst.polygon,
-            ))
+            result.append(
+                InstanceMask(
+                    class_id=inst.class_id,
+                    class_name=inst.class_name,
+                    confidence=inst.confidence,
+                    bbox=inst.bbox,
+                    mask_rle=inst.mask_rle,
+                    polygon=inst.polygon,
+                )
+            )
         elif isinstance(inst, dict):
-            result.append(InstanceMask(
-                class_id=inst["class_id"],
-                class_name=inst["class_name"],
-                confidence=inst["confidence"],
-                bbox=inst["bbox"],
-                mask_rle=inst.get("mask_rle", ""),
-                polygon=inst.get("polygon"),
-            ))
+            result.append(
+                InstanceMask(
+                    class_id=inst["class_id"],
+                    class_name=inst["class_name"],
+                    confidence=inst["confidence"],
+                    bbox=inst["bbox"],
+                    mask_rle=inst.get("mask_rle", ""),
+                    polygon=inst.get("polygon"),
+                )
+            )
     return result
 
 
@@ -89,10 +98,13 @@ async def segment_image(
         raise HTTPException(status_code=500, detail=f"Image fetch failed: {exc}")
 
     import numpy as np
+
     image_np = np.array(pil_image)
 
     try:
-        segmenter = await get_road_segmenter(settings.ROAD_SEG_MODEL_PATH, "gpu" if settings.ENVIRONMENT == "production" else "cpu", db=db)
+        segmenter = await get_road_segmenter(
+            settings.ROAD_SEG_MODEL_PATH, "gpu" if settings.ENVIRONMENT == "production" else "cpu", db=db
+        )
         if not segmenter.is_loaded():
             raise HTTPException(
                 status_code=503,
@@ -114,9 +126,7 @@ async def segment_image(
     surface_type = classify_surface_type(results) if results else "unpaved"
     instances = _instances_to_schema(results)
 
-    existing = await db.execute(
-        select(RoadAnnotation).where(RoadAnnotation.annotation_id == request.image_id)
-    )
+    existing = await db.execute(select(RoadAnnotation).where(RoadAnnotation.annotation_id == request.image_id))
     existing_ra = existing.scalar_one_or_none()
 
     if existing_ra:
@@ -149,6 +159,127 @@ async def segment_image(
         image_id=request.image_id,
         instances=instances,
         surface_type=surface_type,
+        model_version="yolov8n-seg-v2-corrected",
+        latency_ms=round(elapsed_ms, 2),
+    )
+
+
+@road_router.post("/scene", response_model=RoadSceneResponse)
+async def analyze_road_scene_endpoint(
+    request: RoadSceneRequest,
+    db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    """Semantic road-scene analysis: drivable surface, hazards, sidewalk/curb,
+    and metric road-edge distance fused from instance masks + flat-ground depth."""
+    from app.ai.metric_depth import CameraCalibration, metric_depth_map
+    from app.ai.road_semantic import analyze_road_scene
+    from app.ai.road_segmenter import classify_surface_type, get_road_segmenter
+
+    annotation = await db.get(Annotation, request.image_id)
+    if annotation is None:
+        raise HTTPException(status_code=404, detail="Image not found")
+
+    import io
+
+    import numpy as np
+    from PIL import Image
+
+    try:
+        mc = await get_minio_client()
+        response = mc.get_object(settings.MINIO_BUCKET, annotation.image_path)
+        pil_image = Image.open(io.BytesIO(response.read()))
+        if pil_image.mode != "RGB":
+            pil_image = pil_image.convert("RGB")
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Image fetch failed: {exc}")
+
+    image_np = np.array(pil_image)
+
+    segmenter = await get_road_segmenter(
+        settings.ROAD_SEG_MODEL_PATH, "gpu" if settings.ENVIRONMENT == "production" else "cpu", db=db
+    )
+    if not segmenter.is_loaded():
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Road segmentation model not available. "
+                "Train a road model with scripts/train_road_seg.py and set ROAD_SEG_MODEL_PATH "
+                "to models/road_seg/best.onnx. COCO-pretrained models are rejected."
+            ),
+        )
+    calibration = CameraCalibration(
+        height_m=request.camera_height_m,
+        focal_length_px=request.focal_length_px,
+        horizon_fraction=request.horizon_fraction,
+    )
+
+    def _run_scene_inference() -> tuple[float, list[dict], Any, Any, str]:
+        t0 = time.perf_counter()
+        results = segmenter.segment(image_np, request.conf_threshold, request.iou_threshold)
+        metric_map = metric_depth_map(image_np.shape, calibration)
+        scene = analyze_road_scene(results, image_np.shape, metric_map=metric_map, calibration=calibration)
+        elapsed_ms = (time.perf_counter() - t0) * 1000
+        surface_type = classify_surface_type(results) if results else "unpaved"
+        return elapsed_ms, results, scene, metric_map, surface_type
+
+    start = time.perf_counter()
+    try:
+        elapsed_ms, results, scene, metric_map, surface_type = await asyncio.to_thread(_run_scene_inference)
+    except Exception as exc:
+        logger.error("road_scene_failed", error=str(exc), exc_info=True)
+        raise HTTPException(status_code=500, detail="Road scene analysis failed")
+
+    logger.info(
+        "road_scene_completed",
+        image_id=str(request.image_id),
+        has_road=scene.has_road,
+        hazards=len(scene.hazards),
+        curb_present=scene.curb_present,
+        road_edge_distance_m=scene.road_edge_distance_m,
+        latency_ms=round(elapsed_ms, 2),
+    )
+
+    scene_schema = RoadScene(
+        has_road=scene.has_road,
+        drivable_ratio=scene.drivable_ratio,
+        drivable_class_ids=scene.drivable_class_ids,
+        hazards=[
+            {
+                "class_id": h["class_id"],
+                "class_name": h["class_name"],
+                "confidence": h.get("confidence") or 0.0,
+                "bbox": h.get("bbox") or [],
+                "contact_row": h["contact_row"],
+                "distance_m": h.get("distance_m"),
+                "distance_quality": h.get("distance_quality", "unavailable"),
+                "mask_quality": h.get("mask_quality", "none"),
+            }
+            for h in scene.hazards
+        ],
+        sidewalk_present=scene.sidewalk_present,
+        sidewalk_regions=[
+            {
+                "side": r["side"],
+                "coverage": r["coverage"],
+                "method": r.get("method", "geometric_boundary"),
+            }
+            for r in scene.sidewalk_regions
+        ],
+        curb_present=scene.curb_present,
+        curb_method=scene.curb_method,
+        road_continuous_fraction=scene.road_continuous_fraction,
+        road_edge_distance_m=scene.road_edge_distance_m,
+        road_edge_quality=scene.road_edge_quality,
+        mask_quality=scene.mask_quality,
+        method=scene.method,
+    )
+
+    return RoadSceneResponse(
+        image_id=request.image_id,
+        scene=scene_schema,
+        surface_type=surface_type,
+        depth_quality="metric_ground_plane",
         model_version="yolov8n-seg-v2-corrected",
         latency_ms=round(elapsed_ms, 2),
     )
@@ -249,6 +380,7 @@ async def detect_signs(
         raise HTTPException(status_code=500, detail=f"Image fetch failed: {exc}")
 
     import numpy as np
+
     image_np = np.array(pil_image)
 
     start = time.perf_counter()
@@ -292,6 +424,7 @@ async def extract_colors(
         raise HTTPException(status_code=500, detail=f"Image fetch failed: {exc}")
 
     import numpy as np
+
     image_np = np.array(pil_image)
 
     start = time.perf_counter()
@@ -332,6 +465,7 @@ async def detect_poses(
         raise HTTPException(status_code=500, detail=f"Image fetch failed: {exc}")
 
     import numpy as np
+
     image_np = np.array(pil_image)
 
     start = time.perf_counter()
@@ -378,10 +512,14 @@ async def track_objects(
             continue
 
         import numpy as np
+
         image_np = np.array(pil_image)
         detections = detector.detect(image_np, conf_threshold=request.conf_threshold)
         frame_tracks = tracker.update(
-            [{"bbox": [d.x1, d.y1, d.x2, d.y2], "confidence": d.confidence, "class_name": d.class_name} for d in detections]
+            [
+                {"bbox": [d.x1, d.y1, d.x2, d.y2], "confidence": d.confidence, "class_name": d.class_name}
+                for d in detections
+            ]
         )
         for t in frame_tracks:
             t["frame_id"] = str(image_id)
@@ -399,9 +537,7 @@ async def get_road_result(
     db: AsyncSession = Depends(get_db),
     user: dict = Depends(get_current_user),
 ):
-    result = await db.execute(
-        select(RoadAnnotation).where(RoadAnnotation.annotation_id == annotation_id)
-    )
+    result = await db.execute(select(RoadAnnotation).where(RoadAnnotation.annotation_id == annotation_id))
     ra = result.scalar_one_or_none()
     if ra is None:
         raise HTTPException(status_code=404, detail="Road annotation not found")
@@ -428,9 +564,7 @@ async def update_road_result(
     db: AsyncSession = Depends(get_db),
     user: dict = Depends(require_role(["ADMIN", "QA", "ANNOTATOR"])),
 ):
-    result = await db.execute(
-        select(RoadAnnotation).where(RoadAnnotation.annotation_id == annotation_id)
-    )
+    result = await db.execute(select(RoadAnnotation).where(RoadAnnotation.annotation_id == annotation_id))
     ra = result.scalar_one_or_none()
     if ra is None:
         raise HTTPException(status_code=404, detail="Road annotation not found")

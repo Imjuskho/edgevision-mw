@@ -78,18 +78,22 @@ class TestYoloSeg:
     def test_assign_masks_by_iou(self):
         from app.ai.yolo_seg import assign_masks
 
-        detections = [{
-            "label": "car_private",
-            "confidence": 0.9,
-            "bbox": [0.3, 0.3, 0.4, 0.4],
-        }]
+        detections = [
+            {
+                "label": "car_private",
+                "confidence": 0.9,
+                "bbox": [0.3, 0.3, 0.4, 0.4],
+            }
+        ]
         mask = np.zeros((100, 100), dtype=bool)
         mask[30:70, 30:70] = True
-        instances = [{
-            "class_name": "car",
-            "bbox": [0.29, 0.29, 0.42, 0.42],
-            "mask": mask,
-        }]
+        instances = [
+            {
+                "class_name": "car",
+                "bbox": [0.29, 0.29, 0.42, 0.42],
+                "mask": mask,
+            }
+        ]
         result = assign_masks(detections, instances)
         assert result[0]["mask"] is mask
         assert result[0]["mask_iou"] > 0.5
@@ -97,11 +101,13 @@ class TestYoloSeg:
     def test_assign_masks_no_overlap_keeps_bbox_only(self):
         from app.ai.yolo_seg import assign_masks
 
-        detections = [{
-            "label": "car_private",
-            "bbox": [0.1, 0.1, 0.2, 0.2],
-            "confidence": 0.9,
-        }]
+        detections = [
+            {
+                "label": "car_private",
+                "bbox": [0.1, 0.1, 0.2, 0.2],
+                "confidence": 0.9,
+            }
+        ]
         mask = np.zeros((100, 100), dtype=bool)
         mask[70:90, 70:90] = True
         instances = [{"class_name": "car", "bbox": [0.7, 0.7, 0.2, 0.2], "mask": mask}]
@@ -160,13 +166,15 @@ async def test_auto_label_falls_back_to_yolo_seg_when_sam_unavailable():
     yolo_mock.is_loaded.return_value = True
     inst_mask = np.zeros((100, 100), dtype=bool)
     inst_mask[30:70, 30:70] = True
-    yolo_mock.detect.return_value = [{
-        "class_name": "car",
-        "taxonomy": "car_private",
-        "confidence": 0.9,
-        "bbox": [0.3, 0.3, 0.4, 0.4],
-        "mask": inst_mask,
-    }]
+    yolo_mock.detect.return_value = [
+        {
+            "class_name": "car",
+            "taxonomy": "car_private",
+            "confidence": 0.9,
+            "bbox": [0.3, 0.3, 0.4, 0.4],
+            "mask": inst_mask,
+        }
+    ]
 
     with (
         patch("app.core.dependencies.get_minio_client_sync", return_value=mc),
@@ -180,4 +188,3 @@ async def test_auto_label_falls_back_to_yolo_seg_when_sam_unavailable():
     assert summary["annotations_created"] == 1
     assert summary["prelabeled"] == 0
     assert yolo_mock.detect.call_count == 1
-

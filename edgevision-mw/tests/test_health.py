@@ -16,7 +16,8 @@ def _override_redis(mock_redis: AsyncMock):
 
 @pytest.mark.asyncio
 async def test_health_celery_endpoint_ok(
-    db_session, test_client: AsyncClient,
+    db_session,
+    test_client: AsyncClient,
 ):
     """GET /health/celery returns ok when Redis heartbeats are fresh."""
 
@@ -39,7 +40,8 @@ async def test_health_celery_endpoint_ok(
 
 @pytest.mark.asyncio
 async def test_health_celery_endpoint_stale(
-    db_session, test_client: AsyncClient,
+    db_session,
+    test_client: AsyncClient,
 ):
     """GET /health/celery reports stale when heartbeats are old."""
 
@@ -56,7 +58,8 @@ async def test_health_celery_endpoint_stale(
 
 @pytest.mark.asyncio
 async def test_health_celery_endpoint_no_heartbeats(
-    db_session, test_client: AsyncClient,
+    db_session,
+    test_client: AsyncClient,
 ):
     """GET /health/celery returns unhealthy when no heartbeats exist."""
 

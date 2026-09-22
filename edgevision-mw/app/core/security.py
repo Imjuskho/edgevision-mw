@@ -11,9 +11,7 @@ from app.core.config import settings
 
 def create_access_token(data: dict, expires_delta: timedelta | None = None) -> str:
     to_encode = data.copy()
-    expire = datetime.now(UTC) + (
-        expires_delta or timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-    )
+    expire = datetime.now(UTC) + (expires_delta or timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES))
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
@@ -50,9 +48,7 @@ def generate_api_key_pair() -> tuple[str, str, str]:
 
 
 def hash_api_key_bcrypt(plaintext: str) -> str:
-    return bcrypt.hashpw(
-        plaintext.encode("utf-8"), bcrypt.gensalt(rounds=API_KEY_BCRYPT_ROUNDS)
-    ).decode("utf-8")
+    return bcrypt.hashpw(plaintext.encode("utf-8"), bcrypt.gensalt(rounds=API_KEY_BCRYPT_ROUNDS)).decode("utf-8")
 
 
 def verify_api_key_bcrypt(plaintext: str, hashed: str) -> bool:
@@ -70,9 +66,7 @@ def generate_api_key() -> str:
     return secrets.token_urlsafe(48)
 
 
-def verify_node_signature(
-    public_key: bytes, message: bytes, signature: bytes
-) -> bool:
+def verify_node_signature(public_key: bytes, message: bytes, signature: bytes) -> bool:
     try:
         key = Ed25519PublicKey.from_public_bytes(public_key)
         key.verify(signature, message)
