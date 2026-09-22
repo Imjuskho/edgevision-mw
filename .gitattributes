@@ -1,0 +1,4 @@
+edgevision-mw/wheelhouse/** filter=lfs diff=lfs merge=lfs -text
+edgevision-mw/local_images/** filter=lfs diff=lfs merge=lfs -text
+edgevision-mw/local_images_extracted/** filter=lfs diff=lfs merge=lfs -text
+edgevision-mw/celerybeat-schedule.db filter=lfs diff=lfs merge=lfs -text
