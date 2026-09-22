@@ -45,7 +45,11 @@ to support the team behind it, any contribution is hugely appreciated.
 | Account number | 1005100832 |
 | Transfer type | EFT (Electronic Funds Transfer) |
 
-More donation options (GitHub Sponsors, PayPal, etc.) coming soon.
+**PayPal**
+
+<https://paypal.me/payphanga>
+
+More donation options (GitHub Sponsors, etc.) coming soon.
 
 ## Note on Git LFS
 
